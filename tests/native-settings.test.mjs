@@ -35,7 +35,7 @@ test('creates and updates Skill markdown, detects stale writes and retains auxil
   const first=await settings.writeSkill({name,revision:'missing',markdown:skill(name)},signal)
   const folder=join(root,'skills',name)
   await writeFile(join(folder,'notes.md'),'retained')
-  assert.deepEqual((await settings.listSkills()).entries,[{name,editable:true}])
+  assert.deepEqual((await settings.listSkills()).entries,[{name,editable:true,description:'Example\n'}])
   assert.equal((await settings.readSkill({name})).markdown,skill(name))
   await assert.rejects(settings.writeSkill({name,revision:'missing',markdown:skill(name)},signal),/changed/)
   const after=await settings.writeSkill({name,revision:first.revision,markdown:skill(name,'New body.')},signal)
@@ -47,6 +47,27 @@ test('creates and updates Skill markdown, detects stale writes and retains auxil
   await assert.rejects(settings.readSkill({name:'../outside'}),/lowercase/)
   const optionalDescription='---\nname: '+name+'\n---\nParagraph without an explicit description.\n'
   assert.equal((await settings.writeSkill({name,revision:'missing',markdown:optionalDescription},signal)).markdown,optionalDescription)
+})
+
+test('structured Skill editing preserves other native frontmatter and leaves raw repair available', async t => {
+  const {settings}=await setup(t)
+  const name='native-fields'
+  const first=await settings.writeSkill({name,revision:'missing',markdown:skill(name)},signal)
+  assert.equal(first.description,'Example\n')
+  assert.equal(first.body,'Example body.\n')
+  const bodyOnly=await settings.writeSkill({name,revision:first.revision,description:first.description,body:'Fresh body.\n'},signal)
+  assert.equal(bodyOnly.markdown,skill(name,'Fresh body.'))
+  const revised=await settings.writeSkill({name,revision:bodyOnly.revision,description:'Updates docs: only when asked',body:''},signal)
+  assert.match(revised.markdown,/x-extra: yes/)
+  assert.equal(revised.description,'Updates docs: only when asked')
+  const fallback=await settings.writeSkill({name,revision:revised.revision,description:'',body:'Fallback paragraph.\n'},signal)
+  assert.doesNotMatch(fallback.markdown,/description:/)
+  assert.match(fallback.markdown,/x-extra: yes/)
+  assert.throws(()=>settings.writeSkill({name,revision:fallback.revision,description:'Missing body'},signal),/description and Markdown body/)
+
+  const second='generated-skill'
+  const created=await settings.writeSkill({name:second,revision:'missing',description:'Fresh Skill',body:'Use it for fixtures.'},signal)
+  assert.match(created.markdown,/^---\nname: generated-skill\ndescription: Fresh Skill\n---\n/)
 })
 
 test('keeps linked Skill and MCP locations out of the writable scope',{skip:process.platform==='win32'},async t=>{
@@ -78,6 +99,10 @@ test('edits native MCP definitions without returning credentials or overwriting 
   await writeFile(file,JSON.stringify(data))
   const original=await settings.listMcp()
   assert.doesNotMatch(JSON.stringify(original),/secret/)
+  assert.deepEqual(original.entries.map(({transport,fields,editable})=>({transport,fields,editable})),[
+    {transport:'http',fields:['url','headers'],editable:true},
+    {transport:'stdio',fields:['command','args','env'],editable:true},
+  ])
   const modified=await settings.writeMcp({name:'protected',revision:original.revision,patch:'{"timeout":19000}'},signal)
   await assert.rejects(settings.writeMcp({name:'protected',revision:modified.revision,patch:'{"url":"https://wrong.test"}'},signal),/OAuth/)
   await assert.rejects(settings.writeMcp({name:'untouched',revision:modified.revision,patch:'{"command":"different"}'},signal),/clear env and args/)
@@ -99,6 +124,18 @@ test('edits native MCP definitions without returning credentials or overwriting 
     patch:'{"url":["https://example.test"]}'},signal),/HTTP/)
   await writeFile(file,'{"api_key":"SENSITIVE')
   await assert.rejects(settings.listMcp(),error=>error.message==='Expected a valid JSON object.')
+})
+
+test('an unsupported MCP entry can be listed and removed without disclosing its content',async t=>{
+  const {root,settings}=await setup(t)
+  await mkdir(join(root,'mcp'),{recursive:true})
+  await writeFile(join(root,'mcp','mcp.json'),JSON.stringify({mcpServers:{malformed:'PRIVATE_VALUE'}}))
+  const view=await settings.listMcp()
+  assert.deepEqual(view.entries,[{name:'malformed',transport:'unknown',fields:[],editable:false}])
+  assert.doesNotMatch(JSON.stringify(view),/PRIVATE_VALUE/)
+  await assert.rejects(settings.writeMcp({name:'malformed',revision:view.revision,patch:'{"command":"node"}'},signal),/unsupported/)
+  const removed=await settings.removeMcp({name:'malformed',revision:view.revision},signal)
+  assert.deepEqual(removed.entries,[])
 })
 
 test('edits the supported native config projection and reports Global discovery',async t=>{

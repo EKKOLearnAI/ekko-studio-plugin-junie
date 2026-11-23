@@ -63,7 +63,7 @@ test('registers local Agent ID on API v1 and disposes registration', async () =>
   assert.equal(registered.agentApiVersion, 1)
   assert.deepEqual(Object.keys(registered.modes), ['global', 'scoped'])
   assert.deepEqual(registered.modes.scoped.protocols, ['chat_completions'])
-  assert.deepEqual(registered.management.settings(common), { viewId: 'native-login' })
+  assert.deepEqual(registered.management.settings(common), { viewId: 'native-config' })
   const login = rpcs.get('native-login')
   assert.equal(rpcs.size, 10)
   const { junieWordmark } = await login(null, common)

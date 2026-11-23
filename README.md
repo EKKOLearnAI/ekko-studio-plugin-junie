@@ -27,17 +27,17 @@ Scoped uses OpenAI Chat Completions between Junie and Studio. Studio determines 
 
 ## Manage native user settings
 
-Open **Agent management → JetBrains Junie → Settings**. The **Junie login** page keeps the shell command and vendor attribution. The same sidebar offers three owner-only pages for the Studio account and Profile that enabled the plugin.
+Open **Agent management → JetBrains Junie → Settings** to see **Native configuration**, with runtime information, the terminal sign-in command and a link back to Agent management. **Junie login** remains available in the sidebar with the vendor attribution. The management pages are available to the Studio account and Profile that enabled the plugin.
 
 | Page | Native file | Editing |
 | --- | --- | --- |
-| **Skills** | `$JUNIE_HOME/skills/<name>/SKILL.md` | List, open, add, edit and remove Markdown entries. The editor uses the native YAML frontmatter format and leaves supporting files in place. |
-| **MCP servers** | `$JUNIE_HOME/mcp/mcp.json` | List redacted entries and add, patch or remove a named server. Use `command`, `args` and `env` for stdio, `url` and `headers` for HTTP(S), and optional `timeout` in milliseconds. |
+| **Skills** | `$JUNIE_HOME/skills/<name>/SKILL.md` | Search name or description, select a row to read its Markdown, and add, edit or remove it. The editor writes YAML frontmatter from the name and description and preserves additional metadata. **Edit full SKILL.md** opens the raw editor. Removal leaves supporting files in place. |
+| **MCP servers** | `$JUNIE_HOME/mcp/mcp.json` | Search cards by name or transport, view the stored field names, and add, patch or remove a named server. Use `command`, `args` and `env` for stdio, `url` and `headers` for HTTP(S), and optional `timeout` in milliseconds. |
 | **Native configuration** | `$JUNIE_HOME/config.json` | Edit `model`, `effort`, `skill-default-locations` and `mcp-default-locations` as JSON. Removing an editable key restores the native fallback. Other keys are preserved on disk. |
 
 Global ACP and these pages use the same native user home. The default is `~/.junie` for the host service user. The next Global session can load the saved files according to Junie's discovery and precedence rules. Project settings and launch options can override user defaults. Studio's Scoped mode continues to use its isolated per-turn home and model authorization. Studio can still pass its own MCP transports to either mode. [Skills](https://junie.jetbrains.com/docs/agent-skills.html) · [MCP configuration](https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html) · [Configuration precedence](https://junie.jetbrains.com/docs/junie-cli-configuration.html)
 
-The pages manage the three default user locations. Use the native CLI for project settings, shared and additional Skill sources, Skill toggles, OAuth, MCP connection management, and `settings.json` preferences. The configuration page is read-only when the service disables default config locations. The MCP page shows the saved transport and timeout. To update a server, supply only the fields to change. Omitted fields stay unchanged and `null` clears a field. Replace or clear any affected connection values when changing a URL or command.
+The pages manage the three default user locations. Use Junie's `/skills` for individual activation and `/mcp` in ACP for connection status. The native CLI also manages project settings, shared and additional Skills, OAuth, model profiles and `settings.json`. The configuration page is read-only when the service disables default config locations. MCP cards show the configured transport, field names and timeout. To update a server, supply only the fields to change. Omitted fields stay unchanged and `null` clears a field. Replace or clear any affected connection values when changing a URL or command.
 
 ## Runtime and verification
 
@@ -61,3 +61,5 @@ npm pack --dry-run --ignore-scripts
 GitHub Actions runs the fixture suite on Linux, macOS and Windows. For integration tests use a separate `HERMES_WEB_UI_HOME`. To link the source, use `ekko-studio plugins link /absolute/path/to/ekko-studio-plugin-junie` or the equivalent `ekko-studio web plugins link`. See the [plugin contract](docs/CONTRACTS.md) and [SDK development guide](docs/DEVELOPMENT.md).
 
 This independent integration uses its original terminal icon in the Studio Plugin Center and Agent management. The official Junie logo in the login settings identifies the upstream product. The plugin and terminal icon are MIT licensed. The upstream logo is governed by the [JetBrains Brand Guidelines](https://www.jetbrains.com/company/brand/) and credited in the [asset notice](assets/NOTICE.md). The included Studio SDK has its own [MIT license](sdk/LICENSE) and [attribution](sdk/NOTICE). The Junie executable is fetched separately from JetBrains and governed by the [JetBrains AI service terms](https://www.jetbrains.com/legal/docs/terms/jetbrains-ai-service/).
+
+The Skill, MCP and configuration page layouts adapt the [MIT-licensed Cline Studio plugin](https://github.com/EKKOLearnAI/ekko-studio-plugin-cline/blob/8a8cf92ec59464820b5320aa41ec3333bf139123/client.mjs), copyright © 2026 Ekko Studio contributors. The license notice is included in [LICENSE](LICENSE).

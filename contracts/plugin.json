@@ -117,6 +117,11 @@
               "editable": {
                 "type": "boolean",
                 "description": "Whether the folder and SKILL.md are regular and within size limits."
+              },
+              "description": {
+                "type": "string",
+                "description": "The Skill description from YAML frontmatter, or empty when the CLI derives it from the body.",
+                "maxLength": 512
               }
             },
             "required": [
@@ -152,12 +157,58 @@
           "type": "string",
           "description": "Full UTF-8 SKILL.md with YAML frontmatter.",
           "maxLength": 1048576
+        },
+        "description": {
+          "type": "string",
+          "description": "The Skill description from YAML frontmatter, or empty when the CLI derives it from the body.",
+          "maxLength": 1048576
+        },
+        "body": {
+          "type": "string",
+          "description": "Markdown body following the frontmatter, with original line breaks.",
+          "maxLength": 1048576
         }
       },
       "required": [
         "name",
         "revision",
         "markdown"
+      ],
+      "additionalProperties": false
+    },
+    "skillEdit": {
+      "type": "object",
+      "description": "Write either full SKILL.md or both description and body. Structured edits preserve other YAML fields.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. Accepted names depend on the selected resource type.",
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 of the exact file text, or missing for an absent file.",
+          "maxLength": 64
+        },
+        "markdown": {
+          "type": "string",
+          "description": "Full UTF-8 SKILL.md with YAML frontmatter.",
+          "maxLength": 1048576
+        },
+        "description": {
+          "type": "string",
+          "description": "The Skill description from YAML frontmatter, or empty when the CLI derives it from the body.",
+          "maxLength": 1048576
+        },
+        "body": {
+          "type": "string",
+          "description": "Markdown body following the frontmatter, with original line breaks.",
+          "maxLength": 1048576
+        }
+      },
+      "required": [
+        "name",
+        "revision"
       ],
       "additionalProperties": false
     },
@@ -225,11 +276,33 @@
               "timeout": {
                 "type": "integer",
                 "description": "Timeout from disk in milliseconds, when representable."
+              },
+              "editable": {
+                "type": "boolean",
+                "description": "True when the server definition is a JSON object that can be edited."
+              },
+              "fields": {
+                "type": "array",
+                "description": "Names of stored supported fields, without connection values.",
+                "items": {
+                  "type": "string",
+                  "description": "A supported Junie MCP field present on disk.",
+                  "enum": [
+                    "command",
+                    "args",
+                    "env",
+                    "url",
+                    "headers",
+                    "timeout"
+                  ]
+                }
               }
             },
             "required": [
               "name",
-              "transport"
+              "transport",
+              "editable",
+              "fields"
             ],
             "additionalProperties": false
           }
@@ -342,7 +415,7 @@
     },
     "native-skill-write": {
       "description": "Create or update one native SKILL.md.",
-      "input": "skill",
+      "input": "skillEdit",
       "output": "skill"
     },
     "native-skill-remove": {

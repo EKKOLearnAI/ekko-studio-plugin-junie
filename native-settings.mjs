@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { lstat, mkdir, open, readdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
-import { isMap, parseDocument } from 'yaml'
+import { Document, isMap, parseDocument } from 'yaml'
 import { engineEnvironment } from './engine.mjs'
 
 const limit = 1024 * 1024
@@ -75,20 +75,45 @@ function mutate(root, signal, callback) {
   return next.finally(() => { if (queues.get(root) === next) queues.delete(root) })
 }
 
-function validateSkill(markdown, name) {
+function splitSkill(markdown) {
   const header = /^\uFEFF?---\r?\n([\s\S]*?)^---[ \t]*(?:\r?\n|$)/m.exec(markdown)
-  if (!header || header.index !== 0) throw new Error('SKILL.md needs a YAML frontmatter header.')
+  if (!header || header.index !== 0) return null
   try {
     const document = parseDocument(header[1])
     if (!document.errors.length && isMap(document.contents)) {
-      const meta = document.toJS({ maxAliasCount: 20 })
-      const body = markdown.slice(header[0].length)
-      const described = typeof meta.description === 'string' && Boolean(meta.description.trim())
-        || meta.description === undefined && body.split(/\r?\n/).some(line => /^[^#\s]/.test(line.trim()))
-      if (meta.name === name && described) return
+      return { header: header[0], document, meta: document.toJS({ maxAliasCount: 20 }), body: markdown.slice(header[0].length) }
     }
   } catch { /* Keep file contents out of errors. */ }
-  throw new Error('The frontmatter name must match the folder, with a description or a body paragraph.')
+  return null
+}
+
+function validateSkill(markdown, name) {
+  const parts = splitSkill(markdown)
+  if (!parts) throw new Error('SKILL.md needs a valid YAML frontmatter header.')
+  const { meta, body } = parts
+  const described = typeof meta.description === 'string' && Boolean(meta.description.trim())
+    || meta.description === undefined && body.split(/\r?\n/).some(line => /^[^#\s]/.test(line.trim()))
+  if (meta.name !== name || !described) {
+    throw new Error('The frontmatter name must match the folder, with a description or a body paragraph.')
+  }
+}
+
+function skillFromFields(name, before, description, body) {
+  const existing = before === null ? null : splitSkill(before)
+  if (before !== null && (existing?.meta.name !== name ||
+      (existing.meta.description !== undefined && typeof existing.meta.description !== 'string'))) {
+    throw new Error('Edit the full SKILL.md to repair its original frontmatter.')
+  }
+  if (existing && (existing.meta.description ?? '') === description && /\r?\n$/.test(existing.header)) {
+    return existing.header + body
+  }
+  const document = existing?.document ?? new Document({name})
+  if (description.trim()) document.set('description', description)
+  else document.delete('description')
+  const lineEnd = before?.includes('\r\n') ? '\r\n' : '\n'
+  const bom = before?.startsWith('\uFEFF') ? '\uFEFF' : ''
+  const yaml = document.toString().replaceAll('\n', lineEnd)
+  return bom + '---' + lineEnd + yaml + '---' + lineEnd + body
 }
 
 function validateConfig(value) {
@@ -212,13 +237,26 @@ export function nativeSettings(env = engineEnvironment()) {
       if (folder.isSymbolicLink()) entries.push({name,editable:false})
       else if (folder.isDirectory()) {
         const item = await inspect(join(path,name,'SKILL.md'))
-        if (item) entries.push({name,editable:item.isFile() && item.size <= limit})
+        if (!item) continue
+        if (!item.isFile() || item.size > limit) { entries.push({name,editable:false}); continue }
+        try {
+          const content = await read(skillParts(name))
+          if (content === null) continue
+          const description = splitSkill(content)?.meta.description
+          entries.push({name,editable:true,...(typeof description === 'string' ? {description:description.slice(0,512)} : {})})
+        } catch { entries.push({name,editable:false}) }
       }
     }
     return { path, discovery: await discovery('skill'), entries }
   }
 
-  const skillView = (name, content) => ({ name, markdown:content ?? '', revision:revisionFor(content) })
+  function skillView(name, content) {
+    const parts = content === null ? null : splitSkill(content)
+    const fields = parts?.meta.name === name &&
+      (parts.meta.description === undefined || typeof parts.meta.description === 'string')
+      ? { description: parts.meta.description ?? '', body: parts.body } : {}
+    return { name, markdown:content ?? '', revision:revisionFor(content), ...fields }
+  }
   const mcpData = text => {
     const value = text === null ? {} : parseJson(text)
     if (!Object.hasOwn(value,'mcpServers')) value.mcpServers = {}
@@ -227,7 +265,13 @@ export function nativeSettings(env = engineEnvironment()) {
   }
   async function mcpView(value, source) {
     const entries = Object.entries(value.mcpServers).filter(([name]) => mcpName(name)).sort(([a],[b]) => a.localeCompare(b))
-      .map(([name,entry]) => ({ name, transport:mcpTransport(entry), ...(Number.isSafeInteger(entry?.timeout) ? { timeout:entry.timeout } : {}) }))
+      .map(([name,entry]) => ({
+        name,
+        transport:mcpTransport(entry),
+        editable:record(entry),
+        fields:record(entry) ? mcpFields.filter(key => Object.hasOwn(entry,key)) : [],
+        ...(Number.isSafeInteger(entry?.timeout) ? { timeout:entry.timeout } : {}),
+      }))
     return { path:join(root,...mcpParts), revision:revisionFor(source), discovery:await discovery('mcp'), entries }
   }
 
@@ -254,14 +298,21 @@ export function nativeSettings(env = engineEnvironment()) {
   return {
     listSkills,
     async readSkill({name}) { return skillView(name,await read(skillParts(name))) },
-    writeSkill({name,revision,markdown},signal) {
+    writeSkill({name,revision,markdown,description,body},signal) {
       const parts = skillParts(name)
-      validateSkill(markdown,name)
+      const raw = typeof markdown === 'string'
+      if (raw ? description !== undefined || body !== undefined
+        : typeof description !== 'string' || typeof body !== 'string') {
+        throw new Error('Provide full SKILL.md or the description and Markdown body.')
+      }
+      if (raw) validateSkill(markdown,name)
       return mutate(root,signal,async () => {
         const before = await read(parts)
         expected(revision,before)
-        await save(parts,before,markdown,signal)
-        return skillView(name,markdown)
+        const next = raw ? markdown : skillFromFields(name,before,description,body)
+        if (!raw) validateSkill(next,name)
+        await save(parts,before,next,signal)
+        return skillView(name,next)
       })
     },
     removeSkill({name,revision},signal) {

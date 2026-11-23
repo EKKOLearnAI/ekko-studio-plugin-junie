@@ -145,7 +145,8 @@
       "id": "native-login",
       "title": "Junie login",
       "slot": "agent-settings",
-      "icon": "settings"
+      "icon": "terminal",
+      "order": 40
     },
     {
       "id": "skills",
@@ -165,7 +166,7 @@
       "id": "native-config",
       "title": "Native configuration",
       "slot": "agent-settings",
-      "icon": "code",
+      "icon": "settings",
       "order": 30
     }
   ]

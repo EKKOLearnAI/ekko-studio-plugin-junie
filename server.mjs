@@ -267,7 +267,7 @@ export function createJunieAgent(owner, manager) {
     getStatus: ctx => manager.status(ctx.signal),
     management: {
       installGuideUrl: installGuide,
-      settings(run) { requireOwner(run); return { viewId: 'native-login' } },
+      settings(run) { requireOwner(run); return { viewId: 'native-config' } },
       checkUpdate(run) { requireOwner(run); return manager.checkUpdate(run) },
       upgrade(input, run) { requireOwner(run); return manager.upgrade(input, run) },
       remove(run) { requireOwner(run); return manager.remove(run) },
