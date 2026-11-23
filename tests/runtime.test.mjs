@@ -69,7 +69,7 @@ test('registers local Agent ID on API v1 and disposes registration', async () =>
   const { junieWordmark } = await login(null, common)
   const officialLogo = await readFile(new URL('../assets/junie-wordmark.svg', import.meta.url))
   assert.equal(junieWordmark, 'data:image/svg+xml;base64,' + officialLogo.toString('base64'))
-  assert.equal(manifest.icon, 'assets/terminal.png')
+  assert.equal(manifest.icon, 'assets/icon.png')
   await assert.rejects(login(null, { ...common, identity: { ...identity, profile: 'another' } }), /account and Profile/)
   await assert.rejects(rpcs.get('native-skills-list')(null, { ...common, identity: { ...identity, userId: 'stranger' } }), /account and Profile/)
   await assert.rejects(rpcs.get('native-mcp-directory-preview')({name:'server',revision:'missing',directory:'/tmp/project'},

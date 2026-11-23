@@ -132,7 +132,7 @@
   "license": "MIT",
   "homepage": "https://junie.jetbrains.com/",
   "repository": "https://github.com/EKKOLearnAI/ekko-studio-plugin-junie",
-  "icon": "assets/terminal.png",
+  "icon": "assets/icon.png",
   "server": "server.mjs",
   "permissions": [
     "agents",
