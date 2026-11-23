@@ -1,0 +1,69 @@
+{
+  "id": "junie",
+  "name": "JetBrains Junie",
+  "description": "Run JetBrains Junie CLI in Studio over Agent Client Protocol.",
+  "i18n": {
+    "en": {
+      "name": "JetBrains Junie",
+      "description": "Run JetBrains Junie CLI in Studio over Agent Client Protocol."
+    },
+    "zh": {
+      "name": "JetBrains Junie",
+      "description": "在 Studio 中通过 Agent Client Protocol 运行 JetBrains Junie CLI。"
+    },
+    "zh-TW": {
+      "name": "JetBrains Junie",
+      "description": "在 Studio 中透過 Agent Client Protocol 執行 JetBrains Junie CLI。"
+    },
+    "ja": {
+      "name": "JetBrains Junie",
+      "description": "Agent Client Protocol を通じて Studio で JetBrains Junie CLI を実行します。"
+    },
+    "ko": {
+      "name": "JetBrains Junie",
+      "description": "Agent Client Protocol을 통해 Studio에서 JetBrains Junie CLI를 실행합니다."
+    },
+    "fr": {
+      "name": "JetBrains Junie",
+      "description": "Exécutez JetBrains Junie CLI dans Studio via Agent Client Protocol."
+    },
+    "es": {
+      "name": "JetBrains Junie",
+      "description": "Ejecuta JetBrains Junie CLI en Studio mediante Agent Client Protocol."
+    },
+    "de": {
+      "name": "JetBrains Junie",
+      "description": "JetBrains Junie CLI über Agent Client Protocol in Studio ausführen."
+    },
+    "pt": {
+      "name": "JetBrains Junie",
+      "description": "Execute o JetBrains Junie CLI no Studio pelo Agent Client Protocol."
+    },
+    "ru": {
+      "name": "JetBrains Junie",
+      "description": "Запускайте JetBrains Junie CLI в Studio через Agent Client Protocol."
+    },
+    "ar": {
+      "name": "JetBrains Junie",
+      "description": "شغّل JetBrains Junie CLI في Studio عبر Agent Client Protocol."
+    },
+    "tr": {
+      "name": "JetBrains Junie",
+      "description": "JetBrains Junie CLI aracını Agent Client Protocol ile Studio’da çalıştırın."
+    }
+  },
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "author": {
+    "name": "Ekko Studio"
+  },
+  "license": "MIT",
+  "homepage": "https://junie.jetbrains.com/",
+  "repository": "https://github.com/EKKOLearnAI/ekko-studio-plugin-junie",
+  "icon": "assets/terminal.png",
+  "server": "server.mjs",
+  "permissions": [
+    "agents"
+  ],
+  "documentation": "https://junie.jetbrains.com/docs/junie-cli.html"
+}

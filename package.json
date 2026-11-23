@@ -1,0 +1,37 @@
+{
+  "name": "ekko-studio-plugin-junie",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "ekko-studio plugins dev .",
+    "harness:check": "node scripts/plugin-harness.mjs check",
+    "test": "node --test tests/*.test.mjs",
+    "prepack": "npm run harness:check && npm test && npm run build --if-present && npm run harness:check"
+  },
+  "devDependencies": {
+    "@ekko-studio/plugin-sdk": "file:./sdk"
+  },
+  "description": "Run JetBrains Junie CLI in Studio over Agent Client Protocol.",
+  "author": "Ekko Studio",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EKKOLearnAI/ekko-studio-plugin-junie.git"
+  },
+  "engines": {
+    "node": ">=24.2.0"
+  },
+  "files": [
+    "plugin.json",
+    "*.mjs",
+    "assets",
+    "contracts",
+    "docs",
+    "sdk",
+    "scripts",
+    "tests",
+    "plugin.harness.json",
+    "AGENTS.md"
+  ]
+}

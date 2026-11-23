@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "description": "Junie exposes a Studio Agent API v1 runtime and uses the vendored Agent types. It defines no RPC, storage or checkpoint models.",
+  "models": {},
+  "rpc": {},
+  "storage": {},
+  "tools": {},
+  "commands": {},
+  "actions": {},
+  "events": {},
+  "checkpoints": {}
+}
