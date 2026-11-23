@@ -819,6 +819,9 @@ async function mountResources(root, ctx, t, labels) {
   dialog.onclose = () => {
     if (dialog.open) return
     edit = null
+    baseline = ''
+    editor.reset()
+    fields.querySelector('.ju-saved-fields')?.remove()
     viewPanel.replaceChildren()
   }
   dialog.oncancel = event => {
