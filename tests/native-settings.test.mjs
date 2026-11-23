@@ -131,11 +131,61 @@ test('an unsupported MCP entry can be listed and removed without disclosing its 
   await mkdir(join(root,'mcp'),{recursive:true})
   await writeFile(join(root,'mcp','mcp.json'),JSON.stringify({mcpServers:{malformed:'PRIVATE_VALUE'}}))
   const view=await settings.listMcp()
-  assert.deepEqual(view.entries,[{name:'malformed',transport:'unknown',fields:[],editable:false}])
+  assert.deepEqual(view.entries,[{name:'malformed',transport:'unknown',fields:[],editable:false,preview:{}}])
   assert.doesNotMatch(JSON.stringify(view),/PRIVATE_VALUE/)
   await assert.rejects(settings.writeMcp({name:'malformed',revision:view.revision,patch:'{"command":"node"}'},signal),/unsupported/)
   const removed=await settings.removeMcp({name:'malformed',revision:view.revision},signal)
   assert.deepEqual(removed.entries,[])
+})
+
+test('MCP preview shows ordinary launch metadata without exposing connection values',async t=>{
+  const {root,settings}=await setup(t)
+  await mkdir(join(root,'mcp'),{recursive:true})
+  const mcpServers = {
+    reference:{command:'node',args:['fixture.js'],timeout:18000},
+    protected:{command:'C:\\PROTECTED_DIRECTORY\\node.exe',
+      args:['C:\\PROTECTED_DIRECTORY\\fixture.js','--token','PRIVATE_TOKEN.js','--stdio'],
+      env:{PASSWORD:'PRIVATE_ENV'}},
+    inline:{command:'node',args:['-e','PRIVATE_SCRIPT.js']},
+    laterFlag:{command:'node',args:['--opaque/PRIVATE_FLAG.js','fixture.js']},
+    shell:{command:'sh',args:['-c','PRIVATE_SHELL.js']},
+    package:{command:'npx',args:['-y','@upstash/context7-mcp','--api-key=PRIVATE_API_KEY']},
+    many:{command:'node',args:['fixture.js',...Array.from({length:22},()=> 'PRIVATE_POSITIONAL')]},
+    remote:{url:'https://USER_VALUE:PRIVATE_PASSWORD@localhost:8888/PRIVATE_PATH?api_key=PRIVATE_QUERY#PRIVATE_FRAGMENT',
+      headers:{Authorization:'PRIVATE_HEADER'},oauth:{clientSecret:'PRIVATE_OAUTH'}},
+  }
+  await writeFile(join(root,'mcp','mcp.json'),JSON.stringify({mcpServers}))
+  const {entries} = await settings.listMcp()
+  const rows = Object.fromEntries(entries.map(x=>[x.name,x.preview]))
+  assert.deepEqual(rows.reference,{command:'node',args:['fixture.js']})
+  assert.deepEqual(rows.protected,{command:'node.exe',args:['fixture.js','','','']})
+  assert.deepEqual(rows.inline,{command:'node',args:['','']})
+  assert.deepEqual(rows.laterFlag,{command:'node',args:['','']})
+  assert.deepEqual(rows.shell,{command:'sh',args:['','']})
+  assert.deepEqual(rows.package,{command:'npx',args:['-y','@upstash/context7-mcp','']})
+  assert.equal(rows.many.args.length,20)
+  assert.equal(rows.many.remainingArgs,3)
+  assert.deepEqual(rows.remote,{url:'https://localhost:8888'})
+  assert.doesNotMatch(JSON.stringify(entries),/PRIVATE_|PROTECTED_DIRECTORY|USER_VALUE/)
+})
+
+test('toggles one MCP using the same enabled field as Junie CLI and preserves connection data',async t=>{
+  const {root,settings}=await setup(t)
+  const file=join(root,'mcp','mcp.json')
+  const initial={command:'node',args:['fixture.js'],env:{PASSWORD:'PRIVATE_VALUE'},timeout:99}
+  const sibling={url:'https://example.test/mcp',enabled:false}
+  await mkdir(join(root,'mcp'),{recursive:true})
+  await writeFile(file, JSON.stringify({mcpServers:{reference:initial,sibling}}))
+  const first=await settings.listMcp()
+  const disabled=await settings.writeMcp({name:'reference',revision:first.revision,patch:'{"enabled":false}'},signal)
+  assert.equal(first.entries[0].enabled,true)
+  assert.equal(disabled.entries[0].enabled,false)
+  assert.deepEqual(json(await readFile(file,'utf8')).mcpServers.reference,{...initial,enabled:false})
+  await assert.rejects(settings.writeMcp({name:'reference',revision:first.revision,patch:'{"enabled":true}'},signal),/changed/)
+  await assert.rejects(settings.writeMcp({name:'reference',revision:disabled.revision,patch:'{"enabled":"false"}'},signal),/boolean/)
+  const restored=await settings.writeMcp({name:'reference',revision:disabled.revision,patch:'{"enabled":true}'},signal)
+  assert.equal(restored.entries[0].enabled,true)
+  assert.deepEqual(json(await readFile(file,'utf8')).mcpServers,{reference:initial,sibling})
 })
 
 test('edits the supported native config projection and reports Global discovery',async t=>{

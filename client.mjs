@@ -119,8 +119,13 @@ const themeStyles = `
   .ju-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:calc(14px * var(--ju-space))}
   .ju-row{display:flex;flex-direction:column;gap:calc(12px * var(--ju-space));padding:calc(16px * var(--ju-space));border:var(--ju-border);border-radius:var(--radius-component,8px);background:var(--theme-card-bg,var(--bg-card));min-width:0}
   .ju-summary{flex:1;min-width:0;overflow-wrap:anywhere}.ju-summary strong{font-size:calc(var(--font-size-base,14px) * 15 / 14);font-weight:600}.ju-summary p{font-size:calc(var(--font-size-base,14px) * 13 / 14);margin-top:8px}
+  .ju-summary .ju-source-path{margin-top:4px;color:var(--text-secondary)}
   .ju-row-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .ju-row-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:var(--ju-border);padding-top:10px}
+  .ju-manager button.ju-switch{flex-shrink:0;min-height:18px;width:32px;height:18px;padding:2px;justify-content:flex-start;border:0;border-radius:12px;background:var(--text-muted)}
+  .ju-manager button.ju-switch[aria-checked=true]{background:var(--accent-primary)}
+  .ju-switch::after{content:'';width:14px;height:14px;border-radius:50%;background:var(--ju-on-accent);transition:transform .15s}
+  .ju-switch[aria-checked=true]::after{transform:translateX(14px)}
   .ju-badges{display:flex;gap:6px;flex-wrap:wrap}
   .ju-badge{display:inline-flex;padding:1px 7px;border:var(--ju-border);border-radius:var(--radius-component,4px);font-size:calc(var(--font-size-base,14px) * 11 / 14);color:var(--text-secondary)}
   .ju-badge.active{color:var(--success,var(--accent-primary));border-color:currentColor}
@@ -181,7 +186,10 @@ const interfaceText = {
     noMatches: 'No matching items', sources: 'Sources and when changes apply', local: 'Local global', total: 'Total',
     on: 'User default discovery on', off: 'User default discovery off', unknown: 'User default discovery not confirmed',
     enabledHelp: 'Check or change individual Skill activation in Junie with /skills.',
-    connectionsHelp: 'Check connections and OAuth in native Junie. ACP /mcp lists runtime status.',
+    connectionsHelp: 'The switch applies on the next Global turn when Junie loads this user file. For live status, OAuth or servers from other locations, use /mcp in terminal Junie with the same JUNIE_HOME. ACP /mcp is read-only.',
+    configuredOn: 'Configured on', configuredOff: 'Configured off', disable: 'Disable', enable: 'Enable',
+    previewHelp: 'Executable and script paths show only the filename. HTTP(S) shows only the origin. Credentials and other arguments stay hidden.',
+    moreArgs: 'Additional arguments hidden',
     scopeHelp: 'This page only manages the default user location. Trusted projects and extra Junie locations can also supply resources.',
     sameHome: 'Global and the native CLI use the same JUNIE_HOME when started with the same environment.',
     description: 'Description', descriptionHelp: 'If left blank, Junie uses the first paragraph of the Markdown.',
@@ -208,7 +216,10 @@ const interfaceText = {
     noMatches: '没有匹配的项目', sources: '来源与生效方式', local: '本机全局', total: '全部',
     on: '用户默认发现已开启', off: '用户默认发现已关闭', unknown: '无法确认用户默认发现状态',
     enabledHelp: '在 Junie 中使用 /skills 查询或切换单项 Skill 的启用状态。',
-    connectionsHelp: '请在原生 Junie 中检查连接和 OAuth。ACP 的 /mcp 可查看运行状态。',
+    connectionsHelp: '开关保存用户配置，Junie 加载此文件时在下一轮 Global 会话生效。实时状态、OAuth 和其他来源的服务可用相同的 JUNIE_HOME 启动终端 Junie 后通过 /mcp 管理。ACP 的 /mcp 是只读的。',
+    configuredOn: '配置已启用', configuredOff: '配置已停用', disable: '停用', enable: '启用',
+    previewHelp: '可执行文件和脚本只显示文件名，HTTP(S) 只显示源站。凭证和其他参数值保持隐藏。',
+    moreArgs: '其余参数已隐藏',
     scopeHelp: '此页面只管理用户默认位置。受信任的项目和 Junie 额外位置也可提供资源。',
     sameHome: 'Global 与使用相同环境启动的原生 CLI 共用 JUNIE_HOME。',
     description: '描述', descriptionHelp: '留空时，Junie 使用 Markdown 的首个正文段落。',
@@ -235,7 +246,10 @@ const interfaceText = {
     noMatches: '沒有符合的項目', sources: '來源與套用方式', local: '本機全域', total: '全部',
     on: '使用者預設探索已啟用', off: '使用者預設探索已停用', unknown: '無法確認使用者預設探索狀態',
     enabledHelp: '在 Junie 中使用 /skills 查詢或切換個別 Skill 的啟用狀態。',
-    connectionsHelp: '請在原生 Junie 中檢查連線和 OAuth。ACP 的 /mcp 可檢視執行狀態。',
+    connectionsHelp: '開關儲存使用者設定，Junie 載入此檔案時在下一輪 Global 工作階段套用。即時狀態、OAuth 和其他來源的服務可用相同的 JUNIE_HOME 啟動終端機 Junie，再用 /mcp 管理。ACP 的 /mcp 為唯讀。',
+    configuredOn: '設定已啟用', configuredOff: '設定已停用', disable: '停用', enable: '啟用',
+    previewHelp: '可執行檔與指令碼只顯示檔名，HTTP(S) 只顯示來源站點。憑證和其他參數值維持隱藏。',
+    moreArgs: '其餘參數已隱藏',
     scopeHelp: '本頁僅管理使用者預設位置。受信任的專案和 Junie 額外位置也可以提供資源。',
     sameHome: 'Global 與在相同環境啟動的原生 CLI 共用 JUNIE_HOME。',
     description: '描述', descriptionHelp: '留空時，Junie 使用 Markdown 的第一個正文段落。',
@@ -452,13 +466,14 @@ async function mountResources(root, ctx, t, labels) {
   const status = message(t.loading), path = el('code', '', 'ju-source-path')
   const source = el('details', '', 'ju-source-info'), discovery = el('p', '', 'ju-note')
   const resourceHelp = skills ? t.enabledHelp : t.connectionsHelp
-  source.append(el('summary', t.sources), el('p', scopeText), path, el('p', t.scopeHelp), el('p', resourceHelp))
+  source.append(el('summary', t.sources), el('p', scopeText), path, el('p', t.scopeHelp))
   const detail = el('section', '', 'ju-skill-detail')
   detail.setAttribute('aria-label', t.body)
   const stats = el('div', '', 'ju-stats'), counts = []
   if (skills) {
     const layout = el('div', '', 'ju-skills-layout'), sidebar = el('aside', '', 'ju-skills-sidebar')
     sidebar.setAttribute('aria-label', t.skills)
+    source.append(el('p', resourceHelp))
     source.insertBefore(discovery, path)
     sidebar.append(status, list, source)
     layout.append(sidebar, detail)
@@ -471,7 +486,7 @@ async function mountResources(root, ctx, t, labels) {
       stats.append(stat)
       counts.push(count)
     }
-    body.append(el('p', scopeText), status, stats, toolbar, discovery, source, list)
+    body.append(el('p', scopeText), status, stats, toolbar, discovery, el('p', resourceHelp, 'ju-note'), source, list)
   }
 
   const dialog = el('dialog', '', 'ju-dialog')
@@ -558,6 +573,28 @@ async function mountResources(root, ctx, t, labels) {
     return box
   }
 
+  function mcpSwitch(item) {
+    const toggle = identifiedButton(item.enabled ? t.disable : t.enable, item, () => operation(async () => {
+      await ctx.rpc.call('native-mcp-write', {
+        name: item.name, revision: data.revision, patch: JSON.stringify({ enabled: !item.enabled }),
+      })
+      if (!active) return
+      await load()
+      if (active) {
+        setMessage(status, savedText)
+        ctx.ui.notify(savedText, 'success')
+        // Rebuilding cards should keep focus on the corresponding switch.
+        const next = [...list.querySelectorAll('.ju-switch')].find(control => control.dataset.resource === item.name)
+        requestAnimationFrame(() => { if (active) next?.focus() })
+      }
+    }), 'ju-switch')
+    toggle.textContent = ''
+    toggle.setAttribute('role', 'switch')
+    toggle.setAttribute('aria-checked', String(item.enabled))
+    toggle.dataset.resource = item.name
+    return toggle
+  }
+
   function showSkill(item) {
     const request = ++previewRequest
     detail.replaceChildren()
@@ -596,8 +633,11 @@ async function mountResources(root, ctx, t, labels) {
     if (!data) return
     list.replaceChildren()
     const query = search.value.trim().toLocaleLowerCase()
-    const matches = data.entries.filter(item => [item.name, item.description, item.transport]
-      .filter(Boolean).join(' ').toLocaleLowerCase().includes(query))
+    const matches = data.entries.filter(item => {
+      const { command, args, url } = item.preview ?? {}
+      return [item.name, item.description, item.transport, command, url, ...(args ?? [])]
+        .filter(Boolean).join(' ').toLocaleLowerCase().includes(query)
+    })
     if (!matches.length) {
       list.append(el('p', data.entries.length ? t.noMatches : skills ? t.emptySkills : t.emptyMcp, 'ju-empty'))
       if (skills) { page.classList.remove('ju-show-detail'); showSkill(null) }
@@ -629,13 +669,22 @@ async function mountResources(root, ctx, t, labels) {
       const card = surface(el('article', '', 'ju-row'), 'card')
       const heading = el('div', '', 'ju-row-heading'), badges = el('div', '', 'ju-badges')
       badges.append(el('span', transport(item), 'ju-badge'), el('span', t.local, 'ju-badge'))
+      if (item.enabled !== undefined) {
+        badges.append(el('span', item.enabled ? t.configuredOn : t.configuredOff, `ju-badge${item.enabled ? ' active' : ''}`))
+      }
       heading.append(el('strong', item.name), badges)
       const summary = el('div', '', 'ju-summary')
-      summary.append(heading, el('p', item.fields.length ? item.fields.join(' · ') : t.unsupported))
+      const { command, url, args, remainingArgs } = item.preview
+      const launch = command && [command, ...(args ?? []).map(value => value || '…'), ...(remainingArgs ? ['…'] : [])].join(' ')
+      const preview = launch || url
+      summary.append(heading)
+      if (preview) summary.append(el('code', preview, 'ju-source-path'))
+      else summary.append(el('p', item.fields.length ? item.fields.join(' · ') : t.unsupported))
       if (item.timeout !== undefined) summary.append(el('p', item.timeout + ' ms'))
       if (!item.editable) summary.append(el('p', t.unsupportedHelp))
       const footer = el('div', '', 'ju-row-footer')
       footer.append(resourceActions(item))
+      if (item.enabled !== undefined) footer.append(mcpSwitch(item))
       card.append(summary, footer)
       list.append(card)
     }
@@ -644,9 +693,11 @@ async function mountResources(root, ctx, t, labels) {
   function showFields(item) {
     const saved = el('div', '', 'ju-summary')
     saved.append(el('p', t.savedFields))
-    const redacted = Object.fromEntries(item.fields.map(key => [key,
-      key === 'timeout' && item.timeout !== undefined ? item.timeout : t.masked]))
-    saved.append(el('pre', JSON.stringify(redacted, null, 2), 'ju-document'))
+    const { command, args, url, remainingArgs } = item.preview
+    const values = { command, args: args?.map(value => value || t.masked), url, timeout: item.timeout, enabled: item.enabled }
+    const redacted = Object.fromEntries(item.fields.map(key => [key, values[key] ?? t.masked]))
+    saved.append(el('pre', JSON.stringify(redacted, null, 2), 'ju-document'), el('p', t.previewHelp, 'ju-note'))
+    if (remainingArgs) saved.append(el('p', t.moreArgs + ' (' + remainingArgs + ')', 'ju-note'))
     return saved
   }
 

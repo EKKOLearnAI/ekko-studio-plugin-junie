@@ -4,13 +4,14 @@ import { lstat, mkdir, open, readdir, rename, unlink, writeFile } from 'node:fs/
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { Document, isMap, parseDocument } from 'yaml'
 import { engineEnvironment } from './engine.mjs'
+import { mcpPreview } from './mcp-preview.mjs'
 
 const limit = 1024 * 1024
 const textDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 const queues = new Map()
 const reserved = new Set(['__proto__', 'constructor', 'prototype'])
 const editableConfig = ['model', 'effort', 'skill-default-locations', 'mcp-default-locations']
-const mcpFields = ['command', 'args', 'env', 'url', 'headers', 'timeout']
+const mcpFields = ['command', 'args', 'env', 'url', 'headers', 'timeout', 'enabled']
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const json = value => JSON.stringify(value, null, 2) + '\n'
 const revisionFor = content => content === null ? 'missing' : createHash('sha256').update(content).digest('hex')
@@ -138,14 +139,23 @@ function mcpTransport(entry) {
 }
 
 function applyMcpPatch(existing, patch) {
-  if (Object.keys(patch).length === 0 || Object.keys(patch).some(key => !mcpFields.includes(key))) {
+  const keys = Object.keys(patch)
+  if (keys.length === 0 || keys.some(key => !mcpFields.includes(key))) {
     throw new Error('Provide at least one supported MCP field.')
   }
   const entry = { ...existing }
   for (const [key, value] of Object.entries(patch)) {
-    if (value === null) delete entry[key]
+    if (value === null || (key === 'enabled' && value === true)) delete entry[key]
     else entry[key] = value
   }
+  const type = mcpTransport(entry)
+  if (type === 'unknown') throw new Error('Use a command for stdio or an HTTP(S) URL for a remote MCP server.')
+  if (entry.enabled !== undefined && typeof entry.enabled !== 'boolean') {
+    throw new Error('MCP enabled must be a boolean.')
+  }
+  // A switch does not edit connection fields, including values Junie already
+  // handles, such as a timeout outside its accepted range.
+  if (keys.length === 1 && keys[0] === 'enabled') return entry
   if (existing?.url && entry.url !== existing.url &&
       ((existing.headers && !Object.hasOwn(patch,'headers')) || existing.oauth)) {
     throw new Error('Replace or clear headers when changing a URL. Edit OAuth endpoint changes in Junie.')
@@ -154,8 +164,6 @@ function applyMcpPatch(existing, patch) {
       ['env','args'].some(key => existing[key] && !Object.hasOwn(patch,key))) {
     throw new Error('Replace or clear env and args when changing an MCP command.')
   }
-  const type = mcpTransport(entry)
-  if (type === 'unknown') throw new Error('Use a command for stdio or an HTTP(S) URL for a remote MCP server.')
   if (type === 'stdio' && Object.hasOwn(entry,'headers')
       || type === 'http' && (Object.hasOwn(entry,'args') || Object.hasOwn(entry,'env'))) {
     throw new Error('MCP transport fields do not match. Use null to clear a field when switching transports.')
@@ -265,13 +273,18 @@ export function nativeSettings(env = engineEnvironment()) {
   }
   async function mcpView(value, source) {
     const entries = Object.entries(value.mcpServers).filter(([name]) => mcpName(name)).sort(([a],[b]) => a.localeCompare(b))
-      .map(([name,entry]) => ({
-        name,
-        transport:mcpTransport(entry),
-        editable:record(entry),
-        fields:record(entry) ? mcpFields.filter(key => Object.hasOwn(entry,key)) : [],
-        ...(Number.isSafeInteger(entry?.timeout) ? { timeout:entry.timeout } : {}),
-      }))
+      .map(([name,entry]) => {
+        const transport = mcpTransport(entry)
+        return {
+          name, transport,
+          editable:record(entry),
+          fields:record(entry) ? mcpFields.filter(key => Object.hasOwn(entry,key)) : [],
+          preview:mcpPreview(entry,transport),
+          ...(transport !== 'unknown' && (entry.enabled === undefined || typeof entry.enabled === 'boolean')
+            ? { enabled:entry.enabled !== false } : {}),
+          ...(Number.isSafeInteger(entry?.timeout) ? { timeout:entry.timeout } : {}),
+        }
+      })
     return { path:join(root,...mcpParts), revision:revisionFor(source), discovery:await discovery('mcp'), entries }
   }
 
