@@ -142,7 +142,7 @@ test('MCP preview shows ordinary launch metadata without exposing connection val
   const {root,settings}=await setup(t)
   await mkdir(join(root,'mcp'),{recursive:true})
   const mcpServers = {
-    reference:{command:'node',args:['fixture.js'],timeout:18000},
+    reference:{command:'node',args:['fixture.js','--port','8080'],timeout:18000},
     protected:{command:'C:\\PROTECTED_DIRECTORY\\node.exe',
       args:['C:\\PROTECTED_DIRECTORY\\fixture.js','--token','PRIVATE_TOKEN.js','--stdio'],
       env:{PASSWORD:'PRIVATE_ENV'}},
@@ -157,7 +157,7 @@ test('MCP preview shows ordinary launch metadata without exposing connection val
   await writeFile(join(root,'mcp','mcp.json'),JSON.stringify({mcpServers}))
   const {entries} = await settings.listMcp()
   const rows = Object.fromEntries(entries.map(x=>[x.name,x.preview]))
-  assert.deepEqual(rows.reference,{command:'node',args:['fixture.js']})
+  assert.deepEqual(rows.reference,{command:'node',args:['fixture.js','--port','8080']})
   assert.deepEqual(rows.protected,{command:'node.exe',args:['fixture.js','','','']})
   assert.deepEqual(rows.inline,{command:'node',args:['','']})
   assert.deepEqual(rows.laterFlag,{command:'node',args:['','']})
@@ -167,6 +167,54 @@ test('MCP preview shows ordinary launch metadata without exposing connection val
   assert.equal(rows.many.remainingArgs,3)
   assert.deepEqual(rows.remote,{url:'https://localhost:8888'})
   assert.doesNotMatch(JSON.stringify(entries),/PRIVATE_|PROTECTED_DIRECTORY|USER_VALUE/)
+})
+
+test('MCP argument preview exposes validated options while keeping secret or ambiguous values concealed',async t=>{
+  const {root,settings}=await setup(t)
+  await mkdir(join(root,'mcp'),{recursive:true})
+  const cases = {
+    ordinary:[
+      ['fixture.js','--port=8080','--host','127.0.0.1','--transport','stdio','--log-level=info','--verbose'],
+      ['fixture.js','--port=8080','--host','127.0.0.1','--transport','stdio','--log-level=info','--verbose'],
+    ],
+    directory:[
+      ['fixture.js','--cwd','/private/DIRECTORY','--directory=/private/INLINE','--port','9090'],
+      ['fixture.js','--cwd','','','--port','9090'],
+    ],
+    sensitiveBeforePort:[
+      ['fixture.js','--token','--port=65432','--port','8080'],
+      ['fixture.js','','','',''],
+    ],
+    sensitiveAfterPort:[
+      ['fixture.js','--port','8080','--api-key=PRIVATE_API_KEY','--log-level','info'],
+      ['fixture.js','--port','8080','','',''],
+    ],
+    inlineCode:[
+      ['-e','PRIVATE_INLINE_CODE','--port','8080'],
+      ['','','',''],
+    ],
+    invalidPort:[
+      ['fixture.js','--port=PRIVATE_PORT','--transport','stdio'],
+      ['fixture.js','','',''],
+    ],
+    outOfRange:[
+      ['fixture.js','--port','65536'],
+      ['fixture.js','--port',''],
+    ],
+    missingValue:[
+      ['fixture.js','--port','--transport','stdio'],
+      ['fixture.js','--port','',''],
+    ],
+    arbitraryPositional:[
+      ['fixture.js','65432','--port','8080'],
+      ['fixture.js','','',''],
+    ],
+  }
+  const mcpServers = Object.fromEntries(Object.entries(cases).map(([name,[args]])=>[name,{command:'node',args}]))
+  await writeFile(join(root,'mcp','mcp.json'),JSON.stringify({mcpServers}))
+  const {entries} = await settings.listMcp()
+  for (const {name,preview} of entries) assert.deepEqual(preview.args,cases[name][1],name)
+  assert.doesNotMatch(JSON.stringify(entries),/PRIVATE_|\/private\/|65432|65536/)
 })
 
 test('toggles one MCP using the same enabled field as Junie CLI and preserves connection data',async t=>{

@@ -312,7 +312,7 @@
                     "description": "First twenty argument positions. An empty string marks a concealed argument.",
                     "items": {
                       "type": "string",
-                      "description": "Recognized launch switch, script basename or package, or empty when concealed.",
+                      "description": "Recognized option or validated value, script basename or package identifier. An empty string marks a concealed argument.",
                       "maxLength": 100
                     }
                   },

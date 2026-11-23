@@ -5,7 +5,28 @@ const packageName = /^(?:@[a-z0-9][a-z0-9_-]{0,31}\/[a-z0-9][a-z0-9._-]{0,63}|[a
 const binaryName = /^[a-z0-9][a-z0-9._-]{0,63}$/i
 const sensitiveName = /(?:^|[._\-/])(?:auth(?:orization)?|bearer|cookie|credential[s]?|password|passwd|oauth|secret[s]?|token[s]?|api[-_]?key|access[-_]?key|private[-_]?key|ghp|github[-_]pat|sk[-_]live)(?:[._\-/]|$)|[a-z0-9]{24,}/i
 const standaloneFlags = new Set(['-y', '--yes', '--stdio', '--quiet', '--no-install'])
+const runtimeFlags = new Set(['--verbose', '--debug', '--read-only'])
 const displayLimit = 20
+
+const portValue = value => /^\d{1,5}$/.test(value) && Number(value) <= 65535 ? value : undefined
+const among = (...choices) => value => choices.includes(value) ? value : undefined
+const bindAddress = among('localhost', '127.0.0.1', '0.0.0.0', '::1', '::')
+// Empty indicates a recognized argument whose value must remain concealed.
+const pathValue = value => value && !/^[-\x00-\x20\x7f]|[\x00-\x1f\x7f]/.test(value) ? '' : undefined
+const optionValues = new Map([
+  ['--port', portValue],
+  ['--host', bindAddress],
+  ['--bind', bindAddress],
+  ['--transport', among('stdio', 'http', 'sse', 'streamable-http', 'streamableHttp')],
+  ['--log-level', among('trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent')],
+  ['--cwd', pathValue],
+  ['--dir', pathValue],
+  ['--directory', pathValue],
+  ['--root', pathValue],
+  ['--workdir', pathValue],
+  ['--config', pathValue],
+  ['--config-dir', pathValue],
+])
 
 function fileName(value, pattern) {
   // Display a portable basename only. Opaque commands and inline shell code
@@ -18,21 +39,43 @@ function fileName(value, pattern) {
 function argumentPreview(command, args) {
   const script = scriptLauncher.test(command)
   const pkg = packageLauncher.test(command)
-  let canRead = script || pkg
+  const preview = Array(Math.min(args.length, displayLimit)).fill('')
+  if (!script && !pkg) return preview
   let targetSeen = false
-  return args.slice(0, displayLimit).map(value => {
-    if (!canRead || typeof value !== 'string') { canRead = false; return '' }
-    if (standaloneFlags.has(value)) return value
-    if (!targetSeen) {
-      const target = script ? fileName(value, scriptName)
-        : packageName.test(value) && !sensitiveName.test(value) ? value : ''
-      if (target) { targetSeen = true; return target }
+  for (let index = 0; index < preview.length; index++) {
+    const argument = args[index]
+    if (typeof argument !== 'string') break
+    if (standaloneFlags.has(argument) || (targetSeen && runtimeFlags.has(argument))) {
+      preview[index] = argument
+      continue
     }
-    // Custom flags, inline code and positional data can carry credentials.
-    // Their remaining values have no safe meaning without a command schema.
-    canRead = false
-    return ''
-  })
+    if (!targetSeen) {
+      const target = script ? fileName(argument, scriptName)
+        : packageName.test(argument) && !sensitiveName.test(argument) ? argument : ''
+      if (!target) break
+      preview[index] = target
+      targetSeen = true
+      continue
+    }
+    const equals = argument.indexOf('=')
+    const inline = equals !== -1
+    const option = inline ? argument.slice(0, equals) : argument
+    const readValue = optionValues.get(option)
+    // Once the argument boundary is ambiguous, later option-looking values
+    // may themselves be credentials. Do not resume parsing after that point.
+    if (!readValue) break
+    if (!inline) preview[index] = option
+    const raw = inline ? argument.slice(equals + 1) : args[index + 1]
+    const value = typeof raw === 'string' ? readValue(raw) : undefined
+    if (value === undefined) break
+    if (inline) {
+      if (value) preview[index] = option + '=' + value
+    } else {
+      index++
+      if (index < preview.length) preview[index] = value
+    }
+  }
+  return preview
 }
 
 export function mcpPreview(entry, transport) {
