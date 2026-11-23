@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,6 +11,9 @@ import { acpServers, buildPrompt, text } from './prompt.mjs'
 import { registerRpc } from './sdk/harness/contracts.mjs'
 import contract from './contracts/plugin.json' with { type: 'json' }
 import manifest from './plugin.json' with { type: 'json' }
+
+const junieWordmark = 'data:image/svg+xml;base64,'
+  + readFileSync(new URL('./assets/junie-wordmark.svg', import.meta.url)).toString('base64')
 
 const installGuide = 'https://junie.jetbrains.com/docs/junie-cli.html'
 const unavailable = 'Install Junie CLI in Studio Agent management, or make an official external executable available to Studio.'
@@ -304,7 +308,7 @@ export function apply(ctx) {
     if (!sameOwner(owner, run.identity)) throw new Error(ownerOnly)
     run.signal.throwIfAborted()
     const { engine } = await manager.resolve()
-    return { command: loginCommand(engine?.file) }
+    return { command: loginCommand(engine?.file), junieWordmark }
   })
   const registration = ctx.extensions.agents.register(createJunieAgent(owner, manager))
   return async () => { await Promise.all([registration.dispose(), disposeLogin()]) }

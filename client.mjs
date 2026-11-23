@@ -24,7 +24,7 @@ export async function mount(root, ctx) {
   const hint = document.createElement('p')
   root.append(hint)
   try {
-    const { command } = await ctx.rpc.call('native-login')
+    const { command, junieWordmark } = await ctx.rpc.call('native-login')
     hint.textContent = command ? explain : missing
     if (command) {
       const block = document.createElement('pre')
@@ -36,6 +36,28 @@ export async function mount(root, ctx) {
       block.append(code)
       root.append(block)
     }
+    const branding = document.createElement('figure')
+    branding.style.margin = '24px 0 0'
+    const link = document.createElement('a')
+    link.href = 'https://www.jetbrains.com/'
+    link.target = '_blank'
+    link.rel = 'noopener noreferrer'
+    link.style.display = 'inline-block'
+    link.style.padding = '8px'
+    link.style.backgroundColor = '#fff'
+    const wordmark = document.createElement('img')
+    wordmark.src = junieWordmark
+    wordmark.alt = 'Junie by JetBrains'
+    wordmark.width = 116
+    wordmark.style.display = 'block'
+    link.append(wordmark)
+    branding.append(link)
+    const notice = document.createElement('figcaption')
+    const copyright = document.createElement('small')
+    copyright.textContent = 'Copyright © 2026 JetBrains s.r.o. Junie and the Junie logo are trademarks of JetBrains s.r.o.'
+    notice.append(copyright)
+    branding.append(notice)
+    root.append(branding)
   } catch {
     hint.textContent = unavailable
   }

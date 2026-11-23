@@ -8,16 +8,22 @@
     },
     "login": {
       "type": "object",
-      "description": "Native login instructions.",
+      "description": "Native login instructions and the JetBrains logo for the secondary product reference in settings.",
       "properties": {
         "command": {
           "type": "string",
           "description": "Shell-quoted command for the current CLI, or empty when absent. No credentials.",
           "maxLength": 8192
+        },
+        "junieWordmark": {
+          "type": "string",
+          "description": "Data URL of the original JetBrains Junie wordmark, for display in the login settings only.",
+          "maxLength": 12288
         }
       },
       "required": [
-        "command"
+        "command",
+        "junieWordmark"
       ],
       "additionalProperties": false
     },
@@ -45,7 +51,7 @@
   },
   "rpc": {
     "native-login": {
-      "description": "Return the native login command to the activating account and Profile.",
+      "description": "Return the native login command and vendor wordmark to the activating account and Profile.",
       "input": "empty",
       "output": "login"
     }
