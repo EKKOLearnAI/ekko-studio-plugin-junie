@@ -1,15 +1,17 @@
 import { execFile } from 'node:child_process'
-import { access, readFile, stat } from 'node:fs/promises'
+import { access, open, readFile, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
+import { Acp } from './acp.mjs'
+import manifest from './plugin.json' with { type: 'json' }
 
 const execute = promisify(execFile)
 const windows = process.platform === 'win32'
 const launcher = windows ? 'junie.exe' : 'junie'
 
-export function engineEnvironment() {
+export function engineEnvironment({ native = true, source = process.env } = {}) {
   const common = new Set([
     'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'USERPROFILE', 'SYSTEMROOT', 'SYSTEMDRIVE',
     'COMSPEC', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'TEMP', 'TMP', 'TMPDIR',
@@ -24,11 +26,11 @@ export function engineEnvironment() {
     'JUNIE_EFFORT', 'JUNIE_MODEL_LOCATIONS', 'JUNIE_MODEL_DEFAULT_LOCATIONS',
     'JUNIE_CONFIG_LOCATION', 'JUNIE_CONFIG_DEFAULT_LOCATIONS',
   ])
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-    common.has(key.toUpperCase()) || junie.has(key)))
+  return Object.fromEntries(Object.entries(source).filter(([key]) =>
+    common.has(key.toUpperCase()) || (native && junie.has(key))))
 }
 
-async function executable(file) {
+export async function executable(file) {
   if (!isAbsolute(file) || (windows && !/\.exe$/i.test(file))) return false
   try {
     await access(file, constants.X_OK)
@@ -38,10 +40,33 @@ async function executable(file) {
   }
 }
 
-export async function resolveEngine() {
-  const override = process.env.EKKO_JUNIE_EXECUTABLE?.trim()
-  if (override) return await executable(override) ? { file: override } : undefined
-  const path = engineEnvironment()
+async function nativeLaunch(file, environment) {
+  if (!await executable(file)) return
+  if (windows) return { file }
+  const handle = await open(file, 'r')
+  let marker
+  try {
+    const prefix = Buffer.alloc(1024)
+    const { bytesRead } = await handle.read(prefix, 0, prefix.length, 0)
+    marker = prefix.subarray(0, bytesRead).toString('utf8')
+  } finally {
+    await handle.close()
+  }
+  if (!marker.startsWith('#!') || !marker.includes('JUNIE_MANAGED_SHIM')) return { file }
+
+  // The installer shim applies pending Junie updates before handling CLI flags.
+  const data = environment.JUNIE_DATA || join(homedir(), '.local', 'share', 'junie')
+  const entries = ['Applications/junie.app/Contents/MacOS/junie', 'junie/bin/junie', 'junie']
+  for (const entry of entries) {
+    const current = join(data, 'current', entry)
+    if (await executable(current)) return { file: current }
+  }
+}
+
+export async function resolveEngine(environment = process.env) {
+  const override = environment.EKKO_JUNIE_EXECUTABLE?.trim()
+  if (override) return nativeLaunch(override, environment)
+  const path = engineEnvironment({ source: environment })
   const search = Object.entries(path).find(([name]) => name.toUpperCase() === 'PATH')?.[1] ?? ''
   const candidates = search.split(delimiter).filter(isAbsolute).map(directory => join(directory, launcher))
   candidates.push(join(homedir(), '.local', 'bin', launcher))
@@ -54,23 +79,38 @@ export async function resolveEngine() {
       candidates.push(join(data, 'versions', version, 'junie', launcher))
     }
   }
-  for (const file of candidates) {
-    if (await executable(file)) return { file }
+  for (const file of new Set(candidates)) {
+    const engine = await nativeLaunch(file, environment)
+    if (engine) return engine
   }
 }
 
-export async function engineStatus(resolve, signal) {
-  const engine = await resolve()
+export function loginCommand(file) {
+  if (!file) return ''
+  return windows ? "& '" + file.replaceAll("'", "''") + "'" : "'" + file.replaceAll("'", "'\\''") + "'"
+}
+
+export async function engineVersion(engine, signal, env = engineEnvironment()) {
   signal.throwIfAborted()
-  if (!engine) return { installed: false, version: '', source: 'not-installed' }
-  try {
-    const { stdout } = await execute(engine.file, [...(engine.args ?? []), '--version'], {
-      env: engineEnvironment(), signal, timeout: 8000, maxBuffer: 32768, windowsHide: true,
-    })
-    const version = stdout.match(/^Junie version:\s*([0-9][\w.+-]*(?: \([0-9][\w.+-]*\))?)\s*$/m)?.[1]
-    if (version) return { installed: true, version, source: 'external' }
-  } catch {
-    signal.throwIfAborted()
+  const { stdout } = await execute(engine.file, [...(engine.args ?? []), '--skip-update-check', '--version'], {
+    env, signal, timeout: 8000, maxBuffer: 32768, windowsHide: true,
+  })
+  return stdout.match(/^Junie version:\s*([0-9][\w.+-]*(?: \([0-9][\w.+-]*\))?)\s*$/m)?.[1]
+}
+
+export function openAcp(engine, cwd, handle, setup = {}) {
+  const args = [...(engine.args ?? []), '--acp=true', '--acp-logging=false', '--skip-update-check', ...(setup.args ?? [])]
+  return new Acp(engine.file, args, { cwd, env: setup.env ?? engineEnvironment() }, handle)
+}
+
+export async function initializeAcp(acp, signal) {
+  const hello = await acp.request('initialize', {
+    protocolVersion: 1,
+    clientInfo: { name: 'ekko-studio-junie', version: manifest.version },
+    clientCapabilities: {},
+  }, signal)
+  if (hello?.protocolVersion !== 1 || hello.agentInfo?.name !== '@jetbrains/junie') {
+    throw new Error('The executable must provide JetBrains Junie ACP v1.')
   }
-  return { installed: false, version: '', source: 'external', error: 'Junie CLI could not report its version.' }
+  return hello.agentCapabilities ?? {}
 }

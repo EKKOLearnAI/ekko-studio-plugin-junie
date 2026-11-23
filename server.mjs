@@ -2,37 +2,24 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Acp, AcpError } from './acp.mjs'
-import { engineEnvironment, engineStatus, resolveEngine } from './engine.mjs'
+import { AcpError } from './acp.mjs'
+import { initializeAcp, loginCommand, openAcp } from './engine.mjs'
+import { managedEngine } from './managed-engine.mjs'
+import { createScopedConfig, scopedModel, scopedProtocols } from './scoped.mjs'
 import { acpServers, buildPrompt, text } from './prompt.mjs'
+import { registerRpc } from './sdk/harness/contracts.mjs'
+import contract from './contracts/plugin.json' with { type: 'json' }
 import manifest from './plugin.json' with { type: 'json' }
 
 const installGuide = 'https://junie.jetbrains.com/docs/junie-cli.html'
-const unavailable = 'Install the official Junie CLI on the Studio host and make its executable available to Studio.'
-const signIn = 'Run junie in a terminal as the Studio service user and sign in or configure a model, then refresh the model list.'
+const unavailable = 'Install Junie CLI in Studio Agent management, or make an official external executable available to Studio.'
+const signIn = 'Open Junie login in Agent management. Run the displayed command as the Studio service user, then sign in or configure a model and refresh the list.'
 const ownerOnly = 'Junie can use native credentials only for the Studio account and Profile that enabled it.'
 const cancelled = { outcome: { outcome: 'cancelled' } }
 const stopReasons = { end_turn: 'stop', refusal: 'stop', max_tokens: 'length', max_turn_requests: 'tool_limit' }
 const toolKinds = new Set(['read', 'edit', 'delete', 'move', 'search', 'execute', 'think', 'fetch', 'switch_mode', 'other'])
 const sameOwner = (left, right) => left.userId === right.userId && left.profile === right.profile
 const validId = value => typeof value === 'string' && /^[^\x00-\x20\x7f][^\x00-\x1f\x7f]{0,511}$/.test(value) && value.trim() === value
-
-function openAcp(engine, cwd, handle) {
-  const args = [...(engine.args ?? []), '--acp=true', '--acp-logging=false', '--skip-update-check']
-  return new Acp(engine.file, args, { cwd, env: engineEnvironment() }, handle)
-}
-
-async function initialize(acp, signal) {
-  const hello = await acp.request('initialize', {
-    protocolVersion: 1,
-    clientInfo: { name: 'ekko-studio-junie', version: manifest.version },
-    clientCapabilities: {},
-  }, signal)
-  if (hello?.protocolVersion !== 1 || hello.agentInfo?.name !== '@jetbrains/junie') {
-    throw new Error('The executable must provide JetBrains Junie ACP v1.')
-  }
-  return hello.agentCapabilities ?? {}
-}
 
 async function newSession(acp, cwd, servers, capabilities, signal) {
   const native = await acp.request('session/new', {
@@ -98,7 +85,7 @@ async function listModels(ctx, resolve) {
     signal.throwIfAborted()
     acp = openAcp(engine, directory, ({ id }) => { if (id !== undefined) acp.methodNotFound(id) })
     ctx.lifecycle.add(() => acp.close())
-    const capabilities = await initialize(acp, signal)
+    const capabilities = await initializeAcp(acp, signal)
     const native = await newSession(acp, directory, {}, capabilities, signal)
     const models = modelsFrom(native)
     if (capabilities.sessionCapabilities?.delete) {
@@ -177,6 +164,16 @@ function usageFrom(usage) {
 }
 
 async function executeTurn(input, run, resolve, signal) {
+  const scoped = run.mode === 'scoped' ? await createScopedConfig(run.model, run.paths.runtimeDir, signal) : undefined
+  try {
+    if (scoped) run.lifecycle.add(scoped.dispose)
+    return await promptTurn(input, run, resolve, signal, scoped)
+  } finally {
+    await scoped?.dispose()
+  }
+}
+
+async function promptTurn(input, run, resolve, signal, scoped) {
   const engine = await resolve()
   signal.throwIfAborted()
   if (!engine) throw new Error(unavailable)
@@ -203,19 +200,28 @@ async function executeTurn(input, run, resolve, signal) {
     } else if (id !== undefined) {
       acp.methodNotFound(id)
     }
-  })
+  }, scoped)
   const cancel = () => {
     if (sessionId && prompting) acp.notify('session/cancel', { sessionId })
   }
   run.lifecycle.add(() => acp.close())
   live.addEventListener('abort', cancel, { once: true })
   try {
-    const capabilities = await initialize(acp, startup)
+    const capabilities = await initializeAcp(acp, startup)
     let native = await newSession(acp, cwd, run.mcpServers, capabilities, startup)
     sessionId = native.sessionId
     native = await selectOption(acp, native, 'brave_mode', 'off', startup)
-    if (run.model.model) native = await selectOption(acp, native, 'model', run.model.model, startup)
-    if (run.model.reasoningEffort) await selectOption(acp, native, 'effort', run.model.reasoningEffort, startup)
+    if (scoped) {
+      native = await selectOption(acp, native, 'model', scopedModel, startup)
+    } else if (run.model.model) {
+      native = await selectOption(acp, native, 'model', run.model.model, startup)
+    }
+    if (run.model.reasoningEffort) {
+      native = await selectOption(acp, native, 'effort', run.model.reasoningEffort, startup)
+    }
+    if (scoped && option(native, 'model')?.currentValue !== scopedModel) {
+      throw new Error('Junie did not confirm the Studio scoped model.')
+    }
 
     const prompt = await buildPrompt(input, run, capabilities.promptCapabilities, live)
     live.throwIfAborted()
@@ -227,11 +233,13 @@ async function executeTurn(input, run, resolve, signal) {
     const finishReason = Object.hasOwn(stopReasons, result?.stopReason) ? stopReasons[result.stopReason] : undefined
     if (!finishReason) throw new Error('Junie stopped the turn before returning a completed response.')
     await output.finish()
-    return { content: output.answer ? [text(output.answer)] : [], finishReason, ...usageFrom(result.usage) }
+    return { content: output.answer ? [text(output.answer)] : [], finishReason, ...(scoped ? {} : usageFrom(result.usage)) }
   } catch (error) {
     live.throwIfAborted()
     if (startup.aborted && !prompting) throw new Error('Junie ACP startup timed out.')
-    if (error instanceof AcpError && error.code === -32000) throw new Error(signIn)
+    if (error instanceof AcpError && error.code === -32000) {
+      throw new Error(scoped ? 'Junie could not activate the isolated Studio model.' : signIn)
+    }
     throw error
   } finally {
     live.removeEventListener('abort', cancel)
@@ -242,29 +250,38 @@ async function executeTurn(input, run, resolve, signal) {
   }
 }
 
-export function createJunieAgent(owner, resolve = resolveEngine) {
+export function createJunieAgent(owner, manager) {
+  const resolve = async () => (await manager.resolve()).engine
+  const requireOwner = run => { if (!sameOwner(owner, run.identity)) throw new Error(ownerOnly) }
   return {
     id: 'junie',
     name: manifest.name,
     vendor: 'JetBrains',
     description: manifest.description,
     agentApiVersion: 1,
-    getStatus: ctx => sameOwner(owner, ctx.identity)
-      ? engineStatus(resolve, ctx.signal)
-      : Promise.resolve({ installed: false, version: '', source: 'external', error: ownerOnly }),
-    management: { installGuideUrl: installGuide },
+    getStatus: ctx => manager.status(ctx.signal),
+    management: {
+      installGuideUrl: installGuide,
+      settings(run) { requireOwner(run); return { viewId: 'native-login' } },
+      checkUpdate(run) { requireOwner(run); return manager.checkUpdate(run) },
+      upgrade(input, run) { requireOwner(run); return manager.upgrade(input, run) },
+      remove(run) { requireOwner(run); return manager.remove(run) },
+      supportsAutoUpdate(run) { return sameOwner(owner, run.identity) ? manager.supportsAutoUpdate(run.signal) : false },
+    },
     modes: {
       global: { listModels: ctx => sameOwner(owner, ctx.identity) ? listModels(ctx, resolve) : catalog('auth_required', ownerOnly) },
+      scoped: { protocols: scopedProtocols },
     },
     features: { surfaces: ['chat'], streaming: true, resume: false },
     runtime: {
       createSession(session) {
-        if (session.mode !== 'global' || !sameOwner(owner, session.identity)) throw new Error(ownerOnly)
+        if (session.mode === 'global') requireOwner(session)
+        else if (session.mode !== 'scoped') throw new Error('Unsupported Junie mode.')
         const disposed = new AbortController()
         session.lifecycle.add(() => disposed.abort())
         return {
           async run(input, run) {
-            if (run.mode !== 'global' || !sameOwner(session.identity, run.identity) ||
+            if (run.mode !== session.mode || !sameOwner(session.identity, run.identity) ||
               session.identity.sessionId !== run.identity.sessionId || session.identity.agentId !== run.identity.agentId) {
               throw new Error(ownerOnly)
             }
@@ -282,6 +299,13 @@ export function createJunieAgent(owner, resolve = resolveEngine) {
 
 export function apply(ctx) {
   const owner = { userId: ctx.identity.userId, profile: ctx.identity.profile }
-  const registration = ctx.extensions.agents.register(createJunieAgent(owner))
-  return () => registration.dispose()
+  const manager = managedEngine(ctx.paths.dataDir)
+  const disposeLogin = registerRpc(ctx, contract, 'native-login', async (_input, run) => {
+    if (!sameOwner(owner, run.identity)) throw new Error(ownerOnly)
+    run.signal.throwIfAborted()
+    const { engine } = await manager.resolve()
+    return { command: loginCommand(engine?.file) }
+  })
+  const registration = ctx.extensions.agents.register(createJunieAgent(owner, manager))
+  return async () => { await Promise.all([registration.dispose(), disposeLogin()]) }
 }

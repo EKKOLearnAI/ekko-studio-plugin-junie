@@ -1,6 +1,6 @@
 {
   "name": "ekko-studio-plugin-junie",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -33,5 +33,8 @@
     "tests",
     "plugin.harness.json",
     "AGENTS.md"
-  ]
+  ],
+  "dependencies": {
+    "yauzl": "3.4.0"
+  }
 }

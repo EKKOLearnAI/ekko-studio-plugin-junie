@@ -1,9 +1,63 @@
 {
   "schemaVersion": 1,
-  "description": "Junie exposes a Studio Agent API v1 runtime and uses the vendored Agent types. It defines no RPC, storage or checkpoint models.",
-  "models": {},
-  "rpc": {},
-  "storage": {},
+  "description": "Junie Agent API v1 runtime, owner-only native login command and managed engine selection.",
+  "models": {
+    "empty": {
+      "type": "null",
+      "description": "No RPC input."
+    },
+    "login": {
+      "type": "object",
+      "description": "Native login instructions.",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Shell-quoted command for the current CLI, or empty when absent. No credentials.",
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false
+    },
+    "engineSelection": {
+      "type": "object",
+      "description": "The selected engine. Empty directory and version make a removal marker.",
+      "properties": {
+        "directory": {
+          "type": "string",
+          "description": "A release directory basename under the managed engine root, or empty.",
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "description": "The official JetBrains build tag, or empty.",
+          "maxLength": 32
+        }
+      },
+      "required": [
+        "directory",
+        "version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "rpc": {
+    "native-login": {
+      "description": "Return the native login command to the activating account and Profile.",
+      "input": "empty",
+      "output": "login"
+    }
+  },
+  "storage": {
+    "engineSelection": {
+      "description": "Atomic pointer to the selected managed engine.",
+      "model": "engineSelection",
+      "version": 1,
+      "scope": "Plugin data directory engine/current.json"
+    }
+  },
   "tools": {},
   "commands": {},
   "actions": {},

@@ -5,54 +5,90 @@
   "i18n": {
     "en": {
       "name": "JetBrains Junie",
-      "description": "Run JetBrains Junie CLI in Studio over Agent Client Protocol."
+      "description": "Run JetBrains Junie CLI in Studio over Agent Client Protocol.",
+      "views": {
+        "native-login": "Junie login"
+      }
     },
     "zh": {
       "name": "JetBrains Junie",
-      "description": "在 Studio 中通过 Agent Client Protocol 运行 JetBrains Junie CLI。"
+      "description": "在 Studio 中通过 Agent Client Protocol 运行 JetBrains Junie CLI。",
+      "views": {
+        "native-login": "Junie 登录"
+      }
     },
     "zh-TW": {
       "name": "JetBrains Junie",
-      "description": "在 Studio 中透過 Agent Client Protocol 執行 JetBrains Junie CLI。"
+      "description": "在 Studio 中透過 Agent Client Protocol 執行 JetBrains Junie CLI。",
+      "views": {
+        "native-login": "Junie 登入"
+      }
     },
     "ja": {
       "name": "JetBrains Junie",
-      "description": "Agent Client Protocol を通じて Studio で JetBrains Junie CLI を実行します。"
+      "description": "Agent Client Protocol を通じて Studio で JetBrains Junie CLI を実行します。",
+      "views": {
+        "native-login": "Junie ログイン"
+      }
     },
     "ko": {
       "name": "JetBrains Junie",
-      "description": "Agent Client Protocol을 통해 Studio에서 JetBrains Junie CLI를 실행합니다."
+      "description": "Agent Client Protocol을 통해 Studio에서 JetBrains Junie CLI를 실행합니다.",
+      "views": {
+        "native-login": "Junie 로그인"
+      }
     },
     "fr": {
       "name": "JetBrains Junie",
-      "description": "Exécutez JetBrains Junie CLI dans Studio via Agent Client Protocol."
+      "description": "Exécutez JetBrains Junie CLI dans Studio via Agent Client Protocol.",
+      "views": {
+        "native-login": "Connexion Junie"
+      }
     },
     "es": {
       "name": "JetBrains Junie",
-      "description": "Ejecuta JetBrains Junie CLI en Studio mediante Agent Client Protocol."
+      "description": "Ejecuta JetBrains Junie CLI en Studio mediante Agent Client Protocol.",
+      "views": {
+        "native-login": "Inicio de sesión de Junie"
+      }
     },
     "de": {
       "name": "JetBrains Junie",
-      "description": "JetBrains Junie CLI über Agent Client Protocol in Studio ausführen."
+      "description": "JetBrains Junie CLI über Agent Client Protocol in Studio ausführen.",
+      "views": {
+        "native-login": "Junie-Anmeldung"
+      }
     },
     "pt": {
       "name": "JetBrains Junie",
-      "description": "Execute o JetBrains Junie CLI no Studio pelo Agent Client Protocol."
+      "description": "Execute o JetBrains Junie CLI no Studio pelo Agent Client Protocol.",
+      "views": {
+        "native-login": "Login do Junie"
+      }
     },
     "ru": {
       "name": "JetBrains Junie",
-      "description": "Запускайте JetBrains Junie CLI в Studio через Agent Client Protocol."
+      "description": "Запускайте JetBrains Junie CLI в Studio через Agent Client Protocol.",
+      "views": {
+        "native-login": "Вход в Junie"
+      }
     },
     "ar": {
       "name": "JetBrains Junie",
-      "description": "شغّل JetBrains Junie CLI في Studio عبر Agent Client Protocol."
+      "description": "شغّل JetBrains Junie CLI في Studio عبر Agent Client Protocol.",
+      "views": {
+        "native-login": "تسجيل الدخول إلى Junie"
+      }
     },
     "tr": {
       "name": "JetBrains Junie",
-      "description": "JetBrains Junie CLI aracını Agent Client Protocol ile Studio’da çalıştırın."
+      "description": "JetBrains Junie CLI aracını Agent Client Protocol ile Studio’da çalıştırın.",
+      "views": {
+        "native-login": "Junie oturum açma"
+      }
     }
   },
-  "version": "0.1.0",
+  "version": "0.2.0",
   "apiVersion": 1,
   "author": {
     "name": "Ekko Studio"
@@ -63,7 +99,17 @@
   "icon": "assets/terminal.png",
   "server": "server.mjs",
   "permissions": [
-    "agents"
+    "agents",
+    "ui"
   ],
-  "documentation": "https://junie.jetbrains.com/docs/junie-cli.html"
+  "documentation": "https://junie.jetbrains.com/docs/junie-cli.html",
+  "client": "client.mjs",
+  "views": [
+    {
+      "id": "native-login",
+      "title": "Junie login",
+      "slot": "agent-settings",
+      "icon": "settings"
+    }
+  ]
 }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 
 if (process.argv.includes('--version')) {
@@ -13,7 +14,16 @@ assert.ok(process.argv.includes('--acp-logging=false'))
 assert.equal(process.env.STUDIO_FIXTURE_SECRET, undefined)
 const settings = process.argv.slice(2)
 const sessionId = randomUUID()
-let model = 'a', effort = 'low', brave = 'brave-auto'
+const modelsAt = settings.indexOf('--model-location')
+const scoped = modelsAt >= 0
+const scopedId = 'v1:6:custom:custom:ekko-studio'
+const profile = scoped ? JSON.parse(readFileSync(join(settings[modelsAt + 1], 'ekko-studio.json'), 'utf8')) : null
+if (scoped) {
+  assert.equal(process.env.JUNIE_API_KEY, undefined)
+  assert.equal(process.env.JUNIE_HOME, process.env.JUNIE_DATA)
+  assert.ok(settings.includes('custom:ekko-studio'))
+}
+let model = scoped ? scopedId : 'a', effort = 'low', brave = 'brave-auto'
 let promptId
 
 const wire = frame => console.log(JSON.stringify({ jsonrpc: '2.0', ...frame }))
@@ -24,7 +34,7 @@ const update = (sessionUpdate, extra, nativeId = sessionId) => wire({
 const delta = (text, nativeId) => update('agent_message_chunk', { content: { type: 'text', text } }, nativeId)
 const select = (id, currentValue, values) => ({ id, type: 'select', currentValue, options: values.map(value => ({ value, name: value })) })
 const config = () => {
-  const models = select('model', model, ['a', 'b'])
+  const models = select('model', model, scoped ? (settings.includes('wrong-scoped-model') ? ['foreign'] : [scopedId]) : ['a', 'b'])
   models.options = [{ group: 'Custom', options: models.options }]
   return [models, select('effort', effort, ['low', 'high']), select('brave_mode', brave, ['brave-auto', 'off', 'on'])]
 }
@@ -75,6 +85,13 @@ for await (const line of createInterface({ input: process.stdin })) {
         update('tool_call', { toolCallId: 'one', kind: 'execute', status: 'pending', rawInput: 'fixture-secret' })
         permission('foreign')
         permission(sessionId)
+      } else if (scoped) {
+        const upstream = await fetch(profile.baseUrl, { method: 'POST', headers: {
+          authorization: 'Bearer ' + profile.apiKey, 'content-type': 'application/json',
+        }, body: JSON.stringify({model: profile.id, max_tokens: 123456, messages: [{role:'user',content:last}]}) })
+        assert.ok(upstream.ok)
+        delta((await upstream.json()).reply)
+        reply(id, { stopReason: 'end_turn', usage: { inputTokens: 1000, outputTokens: 10 } })
       } else {
         delta('fixture ')
         delta(model + '/' + effort)
