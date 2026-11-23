@@ -188,7 +188,9 @@ const interfaceText = {
     enabledHelp: 'Check or change individual Skill activation in Junie with /skills.',
     connectionsHelp: 'The switch applies on the next Global turn when Junie loads this user file. For live status, OAuth or servers from other locations, use /mcp in terminal Junie with the same JUNIE_HOME. ACP /mcp is read-only.',
     configuredOn: 'Configured on', configuredOff: 'Configured off', disable: 'Disable', enable: 'Enable',
-    previewHelp: 'The preview shows validated options such as --port and --threads, and ordinary relative or temporary directories. Private paths, credentials and unknown arguments stay hidden. HTTP(S) shows only the origin.',
+    previewHelp: 'Validated options such as --port and --threads are visible. Directories stay hidden unless you choose to show an exact value. Credentials and unknown arguments stay hidden. HTTP(S) shows only the origin.',
+    directoryPreview: 'Show a directory', exactDirectory: 'Exact directory value', shareDirectory: 'Show in preview and search',
+    hideDirectories: 'Hide all shared directories', directoryPreviewHelp: 'Enter a directory that is already configured for this server. Only share a path you are comfortable showing in this Studio Profile.',
     moreArgs: 'Additional arguments hidden',
     scopeHelp: 'This page only manages the default user location. Trusted projects and extra Junie locations can also supply resources.',
     sameHome: 'Global and the native CLI use the same JUNIE_HOME when started with the same environment.',
@@ -218,7 +220,9 @@ const interfaceText = {
     enabledHelp: '在 Junie 中使用 /skills 查询或切换单项 Skill 的启用状态。',
     connectionsHelp: '开关保存用户配置，Junie 加载此文件时在下一轮 Global 会话生效。实时状态、OAuth 和其他来源的服务可用相同的 JUNIE_HOME 启动终端 Junie 后通过 /mcp 管理。ACP 的 /mcp 是只读的。',
     configuredOn: '配置已启用', configuredOff: '配置已停用', disable: '停用', enable: '启用',
-    previewHelp: '预览显示通过校验的选项（如 --port、--threads）及普通相对目录或临时目录。私有路径、凭证和未知参数保持隐藏，HTTP(S) 只显示源站。',
+    previewHelp: '预览显示通过校验的选项（如 --port、--threads）。目录默认隐藏，可主动选择显示确切的目录值。凭证和未知参数保持隐藏，HTTP(S) 只显示源站。',
+    directoryPreview: '显示一个目录', exactDirectory: '确切目录值', shareDirectory: '在预览和搜索中显示',
+    hideDirectories: '隐藏所有已公开的目录', directoryPreviewHelp: '输入该服务已经配置的目录。只输入你愿意在此 Studio Profile 中显示的路径。',
     moreArgs: '其余参数已隐藏',
     scopeHelp: '此页面只管理用户默认位置。受信任的项目和 Junie 额外位置也可提供资源。',
     sameHome: 'Global 与使用相同环境启动的原生 CLI 共用 JUNIE_HOME。',
@@ -248,7 +252,9 @@ const interfaceText = {
     enabledHelp: '在 Junie 中使用 /skills 查詢或切換個別 Skill 的啟用狀態。',
     connectionsHelp: '開關儲存使用者設定，Junie 載入此檔案時在下一輪 Global 工作階段套用。即時狀態、OAuth 和其他來源的服務可用相同的 JUNIE_HOME 啟動終端機 Junie，再用 /mcp 管理。ACP 的 /mcp 為唯讀。',
     configuredOn: '設定已啟用', configuredOff: '設定已停用', disable: '停用', enable: '啟用',
-    previewHelp: '預覽顯示通過驗證的選項（例如 --port、--threads）及一般相對目錄或暫存目錄。私有路徑、憑證和未知參數維持隱藏，HTTP(S) 只顯示來源站點。',
+    previewHelp: '預覽顯示通過驗證的選項（例如 --port、--threads）。目錄預設隱藏，可主動選擇顯示確切的目錄值。憑證和未知參數維持隱藏，HTTP(S) 只顯示來源站點。',
+    directoryPreview: '顯示一個目錄', exactDirectory: '確切目錄值', shareDirectory: '在預覽和搜尋中顯示',
+    hideDirectories: '隱藏所有已公開的目錄', directoryPreviewHelp: '輸入該服務已設定的目錄。只輸入你願意在此 Studio Profile 中顯示的路徑。',
     moreArgs: '其餘參數已隱藏',
     scopeHelp: '本頁僅管理使用者預設位置。受信任的專案和 Junie 額外位置也可以提供資源。',
     sameHome: 'Global 與在相同環境啟動的原生 CLI 共用 JUNIE_HOME。',
@@ -491,7 +497,7 @@ async function mountResources(root, ctx, t, labels) {
 
   const dialog = el('dialog', '', 'ju-dialog')
   const editor = el('form', '', 'ju-editor'), viewPanel = el('section', '', 'ju-editor')
-  const formHeader = el('h2'), fields = el('fieldset'), editorStatus = message()
+  const formHeader = el('h2'), fields = el('fieldset'), editorStatus = message(), viewStatus = message()
   const formActions = el('div', '', 'ju-buttons')
   const name = field(fields, 'input', nameText, skills ? t.nameHelp : t.mcpNameHelp, { required: true, maxLength: skills ? 64 : 128, dir: 'ltr' }).input
   const description = skills ? field(fields, 'textarea', t.description, t.descriptionHelp, { rows: 2 }) : null
@@ -524,13 +530,15 @@ async function mountResources(root, ctx, t, labels) {
     for (const control of [...list.querySelectorAll('button'), ...detail.querySelectorAll('button')]) {
       control.disabled = value || control.dataset.readOnly === 'true'
     }
+    for (const control of viewPanel.querySelectorAll('button,input')) control.disabled = value
   }
+  const operationStatus = () => dialog.open ? (editor.hidden ? viewStatus : editorStatus) : status
   async function operation(action) {
     if (!active || busy) return
     setBusy(true)
-    setMessage(dialog.open ? editorStatus : status, data ? '' : t.loading)
+    setMessage(operationStatus(), data ? '' : t.loading)
     try { await action() }
-    catch (error) { if (active) setMessage(dialog.open ? editorStatus : status, error.message, true) }
+    catch (error) { if (active) setMessage(operationStatus(), error.message, true) }
     finally { if (active) setBusy(false) }
   }
   async function load() {
@@ -709,10 +717,44 @@ async function mountResources(root, ctx, t, labels) {
   }
   function viewMcp(item) {
     const heading = el('h2', item.name), footer = el('div', '', 'ju-buttons')
+    setMessage(viewStatus, '')
+    viewPanel.replaceChildren(heading, el('p', transport(item) + ' · ' + t.local), showFields(item))
+    if (item.preview.canShareDirectory) {
+      const disclosure = el('details')
+      const form = el('form')
+      const { input } = field(form, 'input', t.exactDirectory, t.directoryPreviewHelp, {
+        required: true, maxLength: 80, dir: 'ltr', autocomplete: 'off',
+      })
+      const submit = () => {
+        if (input.reportValidity()) void updateDirectoryPreview(item, input.value)
+      }
+      form.onsubmit = event => { event.preventDefault(); submit() }
+      form.append(button(t.shareDirectory, submit, 'primary'))
+      disclosure.append(el('summary', t.directoryPreview), form)
+      viewPanel.append(disclosure)
+    }
+    if (item.preview.hasSharedDirectory) {
+      footer.append(button(t.hideDirectories, () => updateDirectoryPreview(item)))
+    }
     footer.append(button(t.close, () => dialog.close()))
-    viewPanel.replaceChildren(heading, el('p', transport(item) + ' · ' + t.local),
-      showFields(item), el('p', resourceHelp), footer)
+    viewPanel.append(viewStatus, el('p', resourceHelp), footer)
     switchPanel(viewPanel, item.name)
+  }
+
+  function updateDirectoryPreview(item, directory) {
+    return operation(async () => {
+      await ctx.rpc.call('native-mcp-directory-preview', {
+        name: item.name, revision: data.revision, ...(directory === undefined ? {} : { directory }),
+      })
+      if (!active) return
+      await load()
+      if (!active) return
+      const updated = data.entries.find(entry => entry.name === item.name)
+      if (updated && dialog.open) {
+        viewMcp(updated)
+        setMessage(viewStatus, savedText)
+      }
+    })
   }
 
   const formState = () => JSON.stringify([name.value, description?.input.value, content.input.value])
@@ -774,7 +816,11 @@ async function mountResources(root, ctx, t, labels) {
       if (active) dialog.close()
     })
   }
-  dialog.onclose = () => { edit = null }
+  dialog.onclose = () => {
+    if (dialog.open) return
+    edit = null
+    viewPanel.replaceChildren()
+  }
   dialog.oncancel = event => {
     if (!editor.hidden) { event.preventDefault(); void cancelEdit() }
   }

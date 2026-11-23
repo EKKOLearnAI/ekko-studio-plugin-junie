@@ -17,28 +17,13 @@ const among = (...choices) => value => choices.includes(value) ? value : undefin
 const bindAddress = among('localhost', '127.0.0.1', '0.0.0.0', '::1', '::')
 // Empty indicates a recognized argument whose value must remain concealed.
 const pathValue = value => value && !/^[-\x00-\x20\x7f]|[\x00-\x1f\x7f]/.test(value) ? '' : undefined
-const directorySegment = /^[a-z][a-z0-9._ -]{0,31}$/i
-const privateDirectory = /(?:^|[._-])(?:private|certs?|keys?|ssh|ssl|vault|sk[-_](?:proj|test)|xox[abprs])(?:[._-]|$)/i
+const directoryOptions = new Set(['--cwd', '--dir', '--directory', '--root', '--workdir'])
 
-function directoryValue(value) {
-  if (pathValue(value) === undefined) return undefined
-  // Reserve space for the option prefix in the RPC's per-argument limit.
-  if (value.length > 80) return ''
-  const path = value.replaceAll('\\', '/')
-  const temporary = /^(?:\/tmp|\/var\/tmp|\/private\/tmp)(?:\/|$)/.exec(path)
-    ?? /^[a-z]:\/temp(?:\/|$)/i.exec(path)
-  if (!temporary && /^(?:\/|[a-z]:|~)/i.test(path)) return ''
-  if (path === '.' || path === './') return value
-
-  const relative = temporary ? path.slice(temporary[0].length) : path.replace(/^\.\//, '')
-  if (temporary && !relative) return value
-  const segments = relative.replace(/\/$/, '').split('/')
-  const ordinary = segments.every(segment => {
-    const identifier = segment.replaceAll(' ', '-')
-    return segment === segment.trim() && directorySegment.test(segment)
-      && !sensitiveName.test(identifier) && !privateDirectory.test(identifier)
-  })
-  return ordinary ? value : ''
+function eligibleDirectory(value) {
+  // Check shape and size only. A path prefix or spelling says nothing about
+  // whether the caller consents to disclosing it.
+  const path = value.replace(/^[a-z]:[\\/]/i, '/')
+  return value.length <= 80 && value === value.trim() && !/[:?#@=`$%]/.test(path)
 }
 
 const workerCount = integerValue(1, 65535)
@@ -54,11 +39,6 @@ const optionValues = new Map([
   ['--bind', bindAddress],
   ['--transport', among('stdio', 'http', 'sse', 'streamable-http', 'streamableHttp')],
   ['--log-level', among('trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent')],
-  ['--cwd', directoryValue],
-  ['--dir', directoryValue],
-  ['--directory', directoryValue],
-  ['--root', directoryValue],
-  ['--workdir', directoryValue],
   ['--config', pathValue],
   ['--config-dir', pathValue],
 ])
@@ -71,11 +51,12 @@ function fileName(value, pattern) {
   return pattern.test(name) && !sensitiveName.test(name) ? name : ''
 }
 
-function argumentPreview(command, args) {
+function argumentPreview(command, args, shareDirectory) {
   const script = scriptLauncher.test(command)
   const pkg = packageLauncher.test(command)
   const preview = Array(Math.min(args.length, displayLimit)).fill('')
-  if (!script && !pkg) return preview
+  const result = { args: preview }
+  if (!script && !pkg) return result
   let targetSeen = false
   for (let index = 0; index < preview.length; index++) {
     const argument = args[index]
@@ -95,14 +76,23 @@ function argumentPreview(command, args) {
     const equals = argument.indexOf('=')
     const inline = equals !== -1
     const option = inline ? argument.slice(0, equals) : argument
-    const readValue = optionValues.get(option)
+    const isDirectory = directoryOptions.has(option)
+    const readValue = isDirectory ? pathValue : optionValues.get(option)
     // Once the argument boundary is ambiguous, later option-looking values
     // may themselves be credentials. Do not resume parsing after that point.
     if (!readValue) break
     if (!inline) preview[index] = option
     const raw = inline ? argument.slice(equals + 1) : args[index + 1]
-    const value = typeof raw === 'string' ? readValue(raw) : undefined
+    let value = typeof raw === 'string' ? readValue(raw) : undefined
     if (value === undefined) break
+    const visibleIndex = index + (inline ? 0 : 1)
+    if (isDirectory && visibleIndex < preview.length && eligibleDirectory(raw)) {
+      result.canShareDirectory = true
+      if (shareDirectory(raw)) {
+        value = raw
+        result.hasSharedDirectory = true
+      }
+    }
     if (inline) {
       if (value) preview[index] = option + '=' + value
     } else {
@@ -110,17 +100,17 @@ function argumentPreview(command, args) {
       if (index < preview.length) preview[index] = value
     }
   }
-  return preview
+  return result
 }
 
-export function mcpPreview(entry, transport) {
+export function mcpPreview(entry, transport, shareDirectory = () => false) {
   if (transport === 'http') return { url: new URL(entry.url).origin }
   if (transport !== 'stdio') return {}
   const command = fileName(entry.command, binaryName)
   const args = Array.isArray(entry.args) ? entry.args : []
   return {
     ...(command ? { command } : {}),
-    ...(Array.isArray(entry.args) ? { args: argumentPreview(command, args) } : {}),
+    ...(Array.isArray(entry.args) ? argumentPreview(command, args, shareDirectory) : {}),
     ...(args.length > displayLimit ? { remainingArgs: args.length - displayLimit } : {}),
   }
 }

@@ -312,7 +312,7 @@
                     "description": "First twenty argument positions. An empty string marks a concealed argument.",
                     "items": {
                       "type": "string",
-                      "description": "Recognized option or validated value including eligible directories, script basename or package identifier. An empty string marks a concealed argument.",
+                      "description": "Recognized option or validated value, explicitly shared directory, script basename or package identifier. An empty string marks a concealed argument.",
                       "maxLength": 100
                     }
                   },
@@ -324,6 +324,14 @@
                   "remainingArgs": {
                     "type": "integer",
                     "description": "Argument count beyond the preview limit, with no values."
+                  },
+                  "canShareDirectory": {
+                    "type": "boolean",
+                    "description": "Whether a supported directory can be explicitly shared, without returning its value."
+                  },
+                  "hasSharedDirectory": {
+                    "type": "boolean",
+                    "description": "Whether the preview contains any explicitly shared directory."
                   }
                 },
                 "required": [],
@@ -432,6 +440,68 @@
         "content"
       ],
       "additionalProperties": false
+    },
+    "mcpDirectoryPreview": {
+      "type": "object",
+      "description": "Opt-in directory display change scoped to the selected server.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. Accepted names depend on the selected resource type.",
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 of the exact file text, or missing for an absent file.",
+          "maxLength": 64
+        },
+        "directory": {
+          "type": "string",
+          "description": "Exact directory already known to the caller. Omit to revoke all shares for this server.",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "name",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "mcpDirectoryApprovals": {
+      "type": "array",
+      "description": "Explicit preview permissions. Store digests only.",
+      "items": {
+        "type": "object",
+        "description": "One server’s directory permissions for an exact launch configuration.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Native resource name. Accepted names depend on the selected resource type.",
+            "maxLength": 128
+          },
+          "launchRevision": {
+            "type": "string",
+            "description": "Digest of the exact saved command and argv.",
+            "maxLength": 64
+          },
+          "directories": {
+            "type": "array",
+            "description": "Digests of exact directory values approved by the caller.",
+            "items": {
+              "type": "string",
+              "description": "Digest of a caller-approved directory value.",
+              "maxLength": 64
+            }
+          }
+        },
+        "required": [
+          "name",
+          "launchRevision",
+          "directories"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "rpc": {
@@ -484,6 +554,11 @@
       "description": "Save explicitly supported Junie user configuration fields.",
       "input": "nativeConfigEdit",
       "output": "nativeConfig"
+    },
+    "native-mcp-directory-preview": {
+      "description": "Share an exact existing directory in the preview or revoke all shares for one server.",
+      "input": "mcpDirectoryPreview",
+      "output": "mcpList"
     }
   },
   "storage": {
@@ -492,6 +567,12 @@
       "model": "engineSelection",
       "version": 1,
       "scope": "Plugin data directory engine/current.json"
+    },
+    "mcpDirectoryApprovals": {
+      "description": "Opt-in shares keyed by native home digest and scoped to the caller.",
+      "model": "mcpDirectoryApprovals",
+      "version": 1,
+      "scope": "Studio plugin Profile storage, per native Junie home"
     }
   },
   "tools": {},

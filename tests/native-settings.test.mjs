@@ -183,15 +183,15 @@ test('MCP argument preview exposes validated options while keeping secret or amb
     ],
     ordinaryDirectoryAndThreads:[
       ['fixture.js','--dir','/tmp/project','--threads','4'],
-      ['fixture.js','--dir','/tmp/project','--threads','4'],
+      ['fixture.js','--dir','','--threads','4'],
     ],
     ordinaryInline:[
       ['fixture.js','--directory=./project/data','--workers=8','--jobs','2','--port=8080'],
-      ['fixture.js','--directory=./project/data','--workers=8','--jobs','2','--port=8080'],
+      ['fixture.js','','--workers=8','--jobs','2','--port=8080'],
     ],
     windowsDirectory:[
       ['fixture.js','--workdir','C:\\Temp\\project','--concurrency','12'],
-      ['fixture.js','--workdir','C:\\Temp\\project','--concurrency','12'],
+      ['fixture.js','--workdir','','--concurrency','12'],
     ],
     sensitiveDirectory:[
       ['fixture.js','--dir','/tmp/private-project','--dir=/tmp/project/token-cache','--root','/tmp/../account','--jobs','4'],
@@ -199,7 +199,15 @@ test('MCP argument preview exposes validated options while keeping secret or amb
     ],
     mixedTemporaryPaths:[
       ['fixture.js','--dir=/tmp/project data','--cwd','/private/tmp/demo','--dir','/tmp/sk-proj-REDACT_ME','--max-workers','2'],
-      ['fixture.js','--dir=/tmp/project data','--cwd','/private/tmp/demo','--dir','','--max-workers','2'],
+      ['fixture.js','','--cwd','','--dir','','--max-workers','2'],
+    ],
+    reportedLeak:[
+      ['fixture.js','--dir','/tmp/passwords/account-list','--cwd=/tmp/confidential/client-records','--threads','4'],
+      ['fixture.js','--dir','','','--threads','4'],
+    ],
+    inconspicuousPaths:[
+      ['fixture.js','--dir','/tmp/amber/roster','--directory','./ledger/notes','--port','8080'],
+      ['fixture.js','--dir','','--directory','','--port','8080'],
     ],
     hiddenConfigAndUrlDirectory:[
       ['fixture.js','--config-dir','/tmp/private-config','--dir','https://USER_VALUE:PRIVATE_PASSWORD@host/path','--threads=2'],
@@ -243,7 +251,56 @@ test('MCP argument preview exposes validated options while keeping secret or amb
   const {entries} = await settings.listMcp()
   for (const {name,preview} of entries) assert.deepEqual(preview.args,cases[name][1],name)
   assert.doesNotMatch(JSON.stringify(entries),
-    /PRIVATE_|USER_VALUE|\/private\/DIRECTORY|private-project|token-cache|\/tmp\/\.\.\/account|private-config|REDACT_ME|65432|65536/)
+    /PRIVATE_|USER_VALUE|\/private\/DIRECTORY|private-project|token-cache|account-list|client-records|amber\/roster|ledger\/notes|private-config|REDACT_ME|65432|65536/)
+})
+
+test('shares only exact, explicitly approved directory arguments for the caller and the current MCP launch',async t=>{
+  const {root,env}=await setup(t)
+  const storage = new Map()
+  const profile = {
+    async get(key) { return structuredClone(storage.get(key)) },
+    async set(key,value) { storage.set(key,structuredClone(value)) },
+  }
+  const settings = nativeSettings(env,profile)
+  const path = join(root,'mcp','mcp.json')
+  const args = ['fixture.js','--dir','/tmp/project','--cwd=./workspace','--threads','4']
+  const entry = {command:'node',args,env:{TOKEN:'PROTECTED_TOKEN'}}
+  const server = 'reference'
+  const mcpServers = {[server]:entry,sibling:entry}
+  await mkdir(join(root,'mcp'),{recursive:true})
+  const raw = JSON.stringify({mcpServers})
+  await writeFile(path,raw)
+  const initial = await settings.listMcp()
+  const request = {name:server,revision:initial.revision}
+  assert.equal(initial.entries[0].preview.canShareDirectory,true)
+  assert.doesNotMatch(JSON.stringify(initial),/\/tmp\/project|\.\/workspace/)
+  await assert.rejects(settings.setMcpDirectory({...request,directory:'/tmp/other'},signal),/exact directory/)
+  const shared = await settings.setMcpDirectory({...request,directory:'/tmp/project'},signal)
+  assert.deepEqual(shared.entries[0].preview.args,['fixture.js','--dir','/tmp/project','','--threads','4'])
+  assert.equal(shared.entries[0].preview.hasSharedDirectory,true)
+  assert.ok(!JSON.stringify(shared.entries[1]).includes('/tmp/project'))
+  assert.ok(!JSON.stringify([...storage]).includes('/tmp/project'))
+  assert.doesNotMatch(JSON.stringify(await nativeSettings(env).listMcp()),/\/tmp\/project/)
+  assert.equal(await readFile(path,'utf8'),raw)
+
+  await settings.setMcpDirectory({...request,directory:'./workspace'},signal)
+  const saved = await nativeSettings(env,profile).listMcp()
+  assert.deepEqual(saved.entries[0].preview.args,args)
+  const toggled = await settings.writeMcp({...request,patch:'{"enabled":false}'},signal)
+  assert.deepEqual(toggled.entries[0].preview.args,args)
+  await assert.rejects(settings.setMcpDirectory(request,signal),/changed/)
+  const hidden = await settings.setMcpDirectory({name:server,revision:toggled.revision},signal)
+  assert.doesNotMatch(JSON.stringify(hidden),/\/tmp\/project|\.\/workspace|PROTECTED_TOKEN/)
+
+  await settings.setMcpDirectory({name:server,revision:hidden.revision,directory:'/tmp/project'},signal)
+  const edited = await settings.writeMcp({name:server,revision:hidden.revision,patch:JSON.stringify({args:[...args.slice(0,-1),'8']})},signal)
+  assert.doesNotMatch(JSON.stringify(edited),/\/tmp\/project/)
+  const restored = await settings.writeMcp({name:server,revision:edited.revision,patch:JSON.stringify({args})},signal)
+  assert.doesNotMatch(JSON.stringify(restored),/\/tmp\/project/)
+
+  await settings.setMcpDirectory({name:server,revision:restored.revision,directory:'/tmp/project'},signal)
+  await writeFile(path,JSON.stringify({mcpServers:{...mcpServers,[server]:{...entry,args:['fixture.js','--dir','/tmp/amber/roster']}}}))
+  assert.doesNotMatch(JSON.stringify(await settings.listMcp()),/\/tmp\/amber\/roster|\/tmp\/project/)
 })
 
 test('toggles one MCP using the same enabled field as Junie CLI and preserves connection data',async t=>{

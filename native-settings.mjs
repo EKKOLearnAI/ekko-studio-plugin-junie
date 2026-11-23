@@ -184,12 +184,19 @@ function applyMcpPatch(existing, patch) {
   return entry
 }
 
-export function nativeSettings(env = engineEnvironment()) {
+export function nativeSettings(env = engineEnvironment(), profileState) {
   if (!env.JUNIE_HOME || !isAbsolute(env.JUNIE_HOME)) throw new Error('Set an absolute JUNIE_HOME to edit Junie user settings.')
   const root = resolve(env.JUNIE_HOME)
   const configEnabled = env.JUNIE_CONFIG_DEFAULT_LOCATIONS?.toLowerCase() !== 'false'
   const configParts = ['config.json']
   const mcpParts = ['mcp','mcp.json']
+  const directoryPreviewKey = 'mcp-directories-' + revisionFor(root)
+  const launchRevision = entry => revisionFor(JSON.stringify([entry.command, entry.args]))
+
+  async function directoryApprovals() {
+    const rows = await profileState?.get(directoryPreviewKey)
+    return Array.isArray(rows) ? rows : []
+  }
   const skillParts = name => {
     if (!skillName(name)) throw new Error('Use a lowercase skill folder name with letters, numbers and single hyphens.')
     return ['skills',name,'SKILL.md']
@@ -271,21 +278,56 @@ export function nativeSettings(env = engineEnvironment()) {
     if (!record(value.mcpServers)) throw new Error('The Junie mcpServers field must be an object.')
     return value
   }
-  async function mcpView(value, source) {
+  async function mcpView(value, source, approvals) {
+    const rows = approvals ?? await directoryApprovals()
+    const byName = new Map(rows.filter(record).map(item => [item.name,item]))
     const entries = Object.entries(value.mcpServers).filter(([name]) => mcpName(name)).sort(([a],[b]) => a.localeCompare(b))
       .map(([name,entry]) => {
         const transport = mcpTransport(entry)
+        const saved = byName.get(name)
+        const shared = saved && transport === 'stdio' && saved.launchRevision === launchRevision(entry)
+          && Array.isArray(saved.directories) ? new Set(saved.directories) : null
         return {
           name, transport,
           editable:record(entry),
           fields:record(entry) ? mcpFields.filter(key => Object.hasOwn(entry,key)) : [],
-          preview:mcpPreview(entry,transport),
+          preview:mcpPreview(entry,transport, directory => shared?.has(revisionFor(directory)) ?? false),
           ...(transport !== 'unknown' && (entry.enabled === undefined || typeof entry.enabled === 'boolean')
             ? { enabled:entry.enabled !== false } : {}),
           ...(Number.isSafeInteger(entry?.timeout) ? { timeout:entry.timeout } : {}),
         }
       })
     return { path:join(root,...mcpParts), revision:revisionFor(source), discovery:await discovery('mcp'), entries }
+  }
+
+  function setMcpDirectory({name,revision,directory}, signal) {
+    if (!mcpName(name)) throw new Error('Enter a valid MCP server name.')
+    if (!profileState) throw new Error('MCP directory preview settings are unavailable.')
+    return mutate(root,signal,async () => {
+      const before = await read(mcpParts)
+      expected(revision,before)
+      const value = mcpData(before)
+      const entry = Object.hasOwn(value.mcpServers,name) ? value.mcpServers[name] : undefined
+      if (!entry) throw new Error('MCP server no longer exists.')
+      const rows = await directoryApprovals()
+      const remaining = rows.filter(row => row?.name !== name)
+      if (directory !== undefined) {
+        let matches = false
+        mcpPreview(entry,mcpTransport(entry), candidate => {
+          matches ||= candidate === directory
+          return false
+        })
+        if (!matches) throw new Error('Enter an exact directory value from a supported argument in this configuration.')
+        const launch = launchRevision(entry)
+        const previous = rows.find(row => row?.name === name && row.launchRevision === launch)
+        const directories = new Set(Array.isArray(previous?.directories) ? previous.directories : [])
+        directories.add(revisionFor(directory))
+        remaining.push({name, launchRevision:launch, directories:[...directories]})
+      }
+      signal.throwIfAborted()
+      await profileState.set(directoryPreviewKey,remaining)
+      return mcpView(value,before,remaining)
+    })
   }
 
   function changeMcp({name, revision, patch}, signal) {
@@ -301,6 +343,14 @@ export function nativeSettings(env = engineEnvironment()) {
       } else {
         if (existing === undefined) throw new Error('MCP server no longer exists.')
         delete value.mcpServers[name]
+      }
+      const next = value.mcpServers[name]
+      if (profileState && (!record(existing) || !record(next) || launchRevision(existing) !== launchRevision(next))) {
+        const rows = await directoryApprovals()
+        const remaining = rows.filter(row => row?.name !== name)
+        // Revoke before editing so a later recreation of the same args cannot
+        // restore an approval that belonged to an earlier entry.
+        if (remaining.length !== rows.length) await profileState.set(directoryPreviewKey,remaining)
       }
       const after = json(value)
       await save(mcpParts,before,after,signal)
@@ -346,6 +396,7 @@ export function nativeSettings(env = engineEnvironment()) {
     },
     writeMcp: changeMcp,
     removeMcp: changeMcp,
+    setMcpDirectory,
     async readConfig() {
       const source = await read(configParts)
       return configView(configData(source),source)

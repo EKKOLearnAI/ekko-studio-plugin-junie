@@ -322,12 +322,13 @@ export function apply(ctx) {
     'native-mcp-list': 'listMcp',
     'native-mcp-write': 'writeMcp',
     'native-mcp-remove': 'removeMcp',
+    'native-mcp-directory-preview': 'setMcpDirectory',
     'native-config-read': 'readConfig',
     'native-config-write': 'writeConfig',
   }
   const settingsDisposers = Object.entries(settingsRpc).map(([name, method]) => registerRpc(ctx, contract, name, (input, run) => {
     authorized(run)
-    return nativeSettings()[method](input, run.signal)
+    return nativeSettings(undefined, run.state?.profile)[method](input, run.signal)
   }))
   const registration = ctx.extensions.agents.register(createJunieAgent(owner, manager))
   return async () => { await Promise.all([registration.dispose(), disposeLogin(), ...settingsDisposers.map(dispose => dispose())]) }
