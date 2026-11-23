@@ -11,6 +11,10 @@ const execute = promisify(execFile)
 const windows = process.platform === 'win32'
 const launcher = windows ? 'junie.exe' : 'junie'
 
+export function nativeJunieHome(source = process.env) {
+  return source.JUNIE_HOME || join(homedir(), '.junie')
+}
+
 export function engineEnvironment({ native = true, source = process.env } = {}) {
   const common = new Set([
     'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'USERPROFILE', 'SYSTEMROOT', 'SYSTEMDRIVE',
@@ -26,8 +30,10 @@ export function engineEnvironment({ native = true, source = process.env } = {}) 
     'JUNIE_EFFORT', 'JUNIE_MODEL_LOCATIONS', 'JUNIE_MODEL_DEFAULT_LOCATIONS',
     'JUNIE_CONFIG_LOCATION', 'JUNIE_CONFIG_DEFAULT_LOCATIONS',
   ])
-  return Object.fromEntries(Object.entries(source).filter(([key]) =>
+  const env = Object.fromEntries(Object.entries(source).filter(([key]) =>
     common.has(key.toUpperCase()) || (native && junie.has(key))))
+  if (native) env.JUNIE_HOME = nativeJunieHome(source)
+  return env
 }
 
 export async function executable(file) {

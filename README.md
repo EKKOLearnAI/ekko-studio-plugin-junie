@@ -25,6 +25,20 @@ When using a dedicated `JUNIE_HOME`, set the same value for the Studio process a
 
 Scoped uses OpenAI Chat Completions between Junie and Studio. Studio determines how to reach the selected upstream provider. It records scoped usage from the gateway. Scoped starts with an isolated Junie home and custom model, and can receive run-scoped MCP servers from Studio when provided. [Junie custom models](https://junie.jetbrains.com/docs/custom-llm-models.html)
 
+## Manage native user settings
+
+Open **Agent management → JetBrains Junie → Settings**. The **Junie login** page keeps the shell command and vendor attribution. The same sidebar offers three owner-only pages for the Studio account and Profile that enabled the plugin.
+
+| Page | Native file | Editing |
+| --- | --- | --- |
+| **Skills** | `$JUNIE_HOME/skills/<name>/SKILL.md` | List, open, add, edit and remove Markdown entries. The editor uses the native YAML frontmatter format and leaves supporting files in place. |
+| **MCP servers** | `$JUNIE_HOME/mcp/mcp.json` | List redacted entries and add, patch or remove a named server. Use `command`, `args` and `env` for stdio, `url` and `headers` for HTTP(S), and optional `timeout` in milliseconds. |
+| **Native configuration** | `$JUNIE_HOME/config.json` | Edit `model`, `effort`, `skill-default-locations` and `mcp-default-locations` as JSON. Removing an editable key restores the native fallback. Other keys are preserved on disk. |
+
+Global ACP and these pages use the same native user home. The default is `~/.junie` for the host service user. The next Global session can load the saved files according to Junie's discovery and precedence rules. Project settings and launch options can override user defaults. Studio's Scoped mode continues to use its isolated per-turn home and model authorization. Studio can still pass its own MCP transports to either mode. [Skills](https://junie.jetbrains.com/docs/agent-skills.html) · [MCP configuration](https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html) · [Configuration precedence](https://junie.jetbrains.com/docs/junie-cli-configuration.html)
+
+The pages manage the three default user locations. Use the native CLI for project settings, shared and additional Skill sources, Skill toggles, OAuth, MCP connection management, and `settings.json` preferences. The configuration page is read-only when the service disables default config locations. The MCP page shows the saved transport and timeout. To update a server, supply only the fields to change. Omitted fields stay unchanged and `null` clears a field. Replace or clear any affected connection values when changing a URL or command.
+
 ## Runtime and verification
 
 Junie runs with `--acp=true`. JetBrains IDE integration is optional. Each Studio turn creates a fresh ACP session and supplies Studio history. Native Studio resume remains disabled while JetBrains-account restart recovery is pending. Junie is put into Safe mode on each turn, and Studio handles ACP permission requests for that turn.

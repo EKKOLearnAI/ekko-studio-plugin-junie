@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { AcpError } from './acp.mjs'
 import { initializeAcp, loginCommand, openAcp } from './engine.mjs'
 import { managedEngine } from './managed-engine.mjs'
+import { nativeSettings } from './native-settings.mjs'
 import { createScopedConfig, scopedModel, scopedProtocols } from './scoped.mjs'
 import { acpServers, buildPrompt, text } from './prompt.mjs'
 import { registerRpc } from './sdk/harness/contracts.mjs'
@@ -304,12 +305,30 @@ export function createJunieAgent(owner, manager) {
 export function apply(ctx) {
   const owner = { userId: ctx.identity.userId, profile: ctx.identity.profile }
   const manager = managedEngine(ctx.paths.dataDir)
-  const disposeLogin = registerRpc(ctx, contract, 'native-login', async (_input, run) => {
+  const authorized = run => {
     if (!sameOwner(owner, run.identity)) throw new Error(ownerOnly)
     run.signal.throwIfAborted()
+  }
+  const disposeLogin = registerRpc(ctx, contract, 'native-login', async (_input, run) => {
+    authorized(run)
     const { engine } = await manager.resolve()
     return { command: loginCommand(engine?.file), junieWordmark }
   })
+  const settingsRpc = {
+    'native-skills-list': 'listSkills',
+    'native-skill-read': 'readSkill',
+    'native-skill-write': 'writeSkill',
+    'native-skill-remove': 'removeSkill',
+    'native-mcp-list': 'listMcp',
+    'native-mcp-write': 'writeMcp',
+    'native-mcp-remove': 'removeMcp',
+    'native-config-read': 'readConfig',
+    'native-config-write': 'writeConfig',
+  }
+  const settingsDisposers = Object.entries(settingsRpc).map(([name, method]) => registerRpc(ctx, contract, name, (input, run) => {
+    authorized(run)
+    return nativeSettings()[method](input, run.signal)
+  }))
   const registration = ctx.extensions.agents.register(createJunieAgent(owner, manager))
-  return async () => { await Promise.all([registration.dispose(), disposeLogin()]) }
+  return async () => { await Promise.all([registration.dispose(), disposeLogin(), ...settingsDisposers.map(dispose => dispose())]) }
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Junie Agent API v1 runtime, owner-only native login command and managed engine selection.",
+  "description": "Junie Agent API, owner-only login/settings RPCs, and managed engine selection.",
   "models": {
     "empty": {
       "type": "null",
@@ -47,6 +47,281 @@
         "version"
       ],
       "additionalProperties": false
+    },
+    "resourceName": {
+      "type": "object",
+      "description": "Skill lookup.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. Accepted names depend on the selected resource type.",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "resourceRevision": {
+      "type": "object",
+      "description": "Name and optimistic revision for mutation.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. Accepted names depend on the selected resource type.",
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 of the exact file text, or missing for an absent file.",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "name",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "skillList": {
+      "type": "object",
+      "description": "Native default user Skill entries.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path under the service account native Junie home.",
+          "maxLength": 8192
+        },
+        "discovery": {
+          "type": "string",
+          "description": "User default discovery, before possible native project and additional overrides.",
+          "enum": [
+            "enabled",
+            "disabled",
+            "unknown"
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "description": "Skill folders under the editable root.",
+          "items": {
+            "type": "object",
+            "description": "Skill row.",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Native resource name. Accepted names depend on the selected resource type.",
+                "maxLength": 128
+              },
+              "editable": {
+                "type": "boolean",
+                "description": "Whether the folder and SKILL.md are regular and within size limits."
+              }
+            },
+            "required": [
+              "name",
+              "editable"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "path",
+        "discovery",
+        "entries"
+      ],
+      "additionalProperties": false
+    },
+    "skill": {
+      "type": "object",
+      "description": "Native Skill contents and current file revision.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. Accepted names depend on the selected resource type.",
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 of the exact file text, or missing for an absent file.",
+          "maxLength": 64
+        },
+        "markdown": {
+          "type": "string",
+          "description": "Full UTF-8 SKILL.md with YAML frontmatter.",
+          "maxLength": 1048576
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "markdown"
+      ],
+      "additionalProperties": false
+    },
+    "removed": {
+      "type": "object",
+      "description": "Successful Skill file removal.",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "description": "True after SKILL.md is removed.",
+          "enum": [
+            true
+          ]
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "additionalProperties": false
+    },
+    "mcpList": {
+      "type": "object",
+      "description": "Redacted native user MCP inventory and file revision.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path under the service account native Junie home.",
+          "maxLength": 8192
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 of the exact file text, or missing for an absent file.",
+          "maxLength": 64
+        },
+        "discovery": {
+          "type": "string",
+          "description": "User default discovery, before possible native project and additional overrides.",
+          "enum": [
+            "enabled",
+            "disabled",
+            "unknown"
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "description": "Server names and non-secret metadata.",
+          "items": {
+            "type": "object",
+            "description": "Redacted MCP server.",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Native resource name. Accepted names depend on the selected resource type.",
+                "maxLength": 128
+              },
+              "transport": {
+                "type": "string",
+                "description": "Transport inferred from the saved native shape.",
+                "enum": [
+                  "stdio",
+                  "http",
+                  "unknown"
+                ]
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Timeout from disk in milliseconds, when representable."
+              }
+            },
+            "required": [
+              "name",
+              "transport"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "path",
+        "revision",
+        "discovery",
+        "entries"
+      ],
+      "additionalProperties": false
+    },
+    "mcpPatch": {
+      "type": "object",
+      "description": "Entry edit using only supported native fields.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Native resource name. Accepted names depend on the selected resource type.",
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 of the exact file text, or missing for an absent file.",
+          "maxLength": 64
+        },
+        "patch": {
+          "type": "string",
+          "description": "JSON object. Fields absent from the patch stay unchanged. Null removes a field.",
+          "maxLength": 1048576
+        }
+      },
+      "required": [
+        "name",
+        "revision",
+        "patch"
+      ],
+      "additionalProperties": false
+    },
+    "nativeConfig": {
+      "type": "object",
+      "description": "User config.json safe projection and capability.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path under the service account native Junie home.",
+          "maxLength": 8192
+        },
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 of the exact file text, or missing for an absent file.",
+          "maxLength": 64
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Default config file is enabled in the service launch environment."
+        },
+        "content": {
+          "type": "string",
+          "description": "JSON object with editable fields from the user config.json.",
+          "maxLength": 1048576
+        }
+      },
+      "required": [
+        "path",
+        "revision",
+        "enabled",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "nativeConfigEdit": {
+      "type": "object",
+      "description": "Replace the editable projection, preserving other fields and checking the file revision.",
+      "properties": {
+        "revision": {
+          "type": "string",
+          "description": "SHA-256 of the exact file text, or missing for an absent file.",
+          "maxLength": 64
+        },
+        "content": {
+          "type": "string",
+          "description": "JSON object with editable fields from the user config.json.",
+          "maxLength": 1048576
+        }
+      },
+      "required": [
+        "revision",
+        "content"
+      ],
+      "additionalProperties": false
     }
   },
   "rpc": {
@@ -54,6 +329,51 @@
       "description": "Return the native login command and vendor wordmark to the activating account and Profile.",
       "input": "empty",
       "output": "login"
+    },
+    "native-skills-list": {
+      "description": "List native user Skill folders.",
+      "input": "empty",
+      "output": "skillList"
+    },
+    "native-skill-read": {
+      "description": "Read one native SKILL.md.",
+      "input": "resourceName",
+      "output": "skill"
+    },
+    "native-skill-write": {
+      "description": "Create or update one native SKILL.md.",
+      "input": "skill",
+      "output": "skill"
+    },
+    "native-skill-remove": {
+      "description": "Remove only the selected SKILL.md.",
+      "input": "resourceRevision",
+      "output": "removed"
+    },
+    "native-mcp-list": {
+      "description": "List redacted rows of the native user MCP configuration.",
+      "input": "empty",
+      "output": "mcpList"
+    },
+    "native-mcp-write": {
+      "description": "Add or patch one native MCP row.",
+      "input": "mcpPatch",
+      "output": "mcpList"
+    },
+    "native-mcp-remove": {
+      "description": "Remove one server row from the native MCP file.",
+      "input": "resourceRevision",
+      "output": "mcpList"
+    },
+    "native-config-read": {
+      "description": "Read the safe projection of the user config file.",
+      "input": "empty",
+      "output": "nativeConfig"
+    },
+    "native-config-write": {
+      "description": "Save explicitly supported Junie user configuration fields.",
+      "input": "nativeConfigEdit",
+      "output": "nativeConfig"
     }
   },
   "storage": {

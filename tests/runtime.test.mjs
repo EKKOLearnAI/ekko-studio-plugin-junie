@@ -49,9 +49,11 @@ async function setup(t, agent = configure(), overrides = {}) {
 }
 
 test('registers local Agent ID on API v1 and disposes registration', async () => {
-  let registered, rpc, disposed = false, rpcDisposed = false
+  let registered, disposed = false
+  const rpcs = new Map()
+  const removed = new Set()
   const dispose = apply({ identity, paths: { dataDir: storage() }, extensions: { rpc: {
-    register(name, handler) { rpc = [name, handler]; return () => { rpcDisposed = true } },
+    register(name, handler) { rpcs.set(name,handler); return () => { removed.add(name) } },
   }, agents: { register(agent) {
     registered = agent
     return { async dispose() { disposed = true } }
@@ -62,15 +64,23 @@ test('registers local Agent ID on API v1 and disposes registration', async () =>
   assert.deepEqual(Object.keys(registered.modes), ['global', 'scoped'])
   assert.deepEqual(registered.modes.scoped.protocols, ['chat_completions'])
   assert.deepEqual(registered.management.settings(common), { viewId: 'native-login' })
-  assert.equal(rpc[0], 'native-login')
-  const { junieWordmark } = await rpc[1](null, common)
+  const login = rpcs.get('native-login')
+  assert.equal(rpcs.size, 10)
+  const { junieWordmark } = await login(null, common)
   const officialLogo = await readFile(new URL('../assets/junie-wordmark.svg', import.meta.url))
   assert.equal(junieWordmark, 'data:image/svg+xml;base64,' + officialLogo.toString('base64'))
   assert.equal(manifest.icon, 'assets/terminal.png')
-  await assert.rejects(rpc[1](null, { ...common, identity: { ...identity, profile: 'another' } }), /account and Profile/)
+  await assert.rejects(login(null, { ...common, identity: { ...identity, profile: 'another' } }), /account and Profile/)
+  await assert.rejects(rpcs.get('native-skills-list')(null, { ...common, identity: { ...identity, userId: 'stranger' } }), /account and Profile/)
+  await assert.rejects(rpcs.get('native-config-write')({ revision: 'missing', content: '{}' },
+    { ...common, identity: { ...identity, profile: 'another' } }), /account and Profile/)
+  assert.deepEqual(manifest.views.map(view => [view.id,view.slot]), [
+    ['native-login','agent-settings'],['skills','agent-settings'],['mcp','agent-settings'],['native-config','agent-settings'],
+  ])
   assert.deepEqual(registered.features, { surfaces: ['chat'], streaming: true, resume: false })
   await dispose()
-  assert.ok(disposed && rpcDisposed)
+  assert.ok(disposed)
+  assert.deepEqual(removed,new Set(rpcs.keys()))
 })
 
 test('discovers executable, grouped native models, default and efforts', async () => {
