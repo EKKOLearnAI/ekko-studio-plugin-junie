@@ -181,6 +181,34 @@ test('MCP argument preview exposes validated options while keeping secret or amb
       ['fixture.js','--cwd','/private/DIRECTORY','--directory=/private/INLINE','--port','9090'],
       ['fixture.js','--cwd','','','--port','9090'],
     ],
+    ordinaryDirectoryAndThreads:[
+      ['fixture.js','--dir','/tmp/project','--threads','4'],
+      ['fixture.js','--dir','/tmp/project','--threads','4'],
+    ],
+    ordinaryInline:[
+      ['fixture.js','--directory=./project/data','--workers=8','--jobs','2','--port=8080'],
+      ['fixture.js','--directory=./project/data','--workers=8','--jobs','2','--port=8080'],
+    ],
+    windowsDirectory:[
+      ['fixture.js','--workdir','C:\\Temp\\project','--concurrency','12'],
+      ['fixture.js','--workdir','C:\\Temp\\project','--concurrency','12'],
+    ],
+    sensitiveDirectory:[
+      ['fixture.js','--dir','/tmp/private-project','--dir=/tmp/project/token-cache','--root','/tmp/../account','--jobs','4'],
+      ['fixture.js','--dir','','','--root','','--jobs','4'],
+    ],
+    mixedTemporaryPaths:[
+      ['fixture.js','--dir=/tmp/project data','--cwd','/private/tmp/demo','--dir','/tmp/sk-proj-REDACT_ME','--max-workers','2'],
+      ['fixture.js','--dir=/tmp/project data','--cwd','/private/tmp/demo','--dir','','--max-workers','2'],
+    ],
+    hiddenConfigAndUrlDirectory:[
+      ['fixture.js','--config-dir','/tmp/private-config','--dir','https://USER_VALUE:PRIVATE_PASSWORD@host/path','--threads=2'],
+      ['fixture.js','--config-dir','','--dir','','--threads=2'],
+    ],
+    invalidThreads:[
+      ['fixture.js','--threads','PRIVATE_THREAD_VALUE','--port','8080'],
+      ['fixture.js','--threads','','',''],
+    ],
     sensitiveBeforePort:[
       ['fixture.js','--token','--port=65432','--port','8080'],
       ['fixture.js','','','',''],
@@ -214,7 +242,8 @@ test('MCP argument preview exposes validated options while keeping secret or amb
   await writeFile(join(root,'mcp','mcp.json'),JSON.stringify({mcpServers}))
   const {entries} = await settings.listMcp()
   for (const {name,preview} of entries) assert.deepEqual(preview.args,cases[name][1],name)
-  assert.doesNotMatch(JSON.stringify(entries),/PRIVATE_|\/private\/|65432|65536/)
+  assert.doesNotMatch(JSON.stringify(entries),
+    /PRIVATE_|USER_VALUE|\/private\/DIRECTORY|private-project|token-cache|\/tmp\/\.\.\/account|private-config|REDACT_ME|65432|65536/)
 })
 
 test('toggles one MCP using the same enabled field as Junie CLI and preserves connection data',async t=>{

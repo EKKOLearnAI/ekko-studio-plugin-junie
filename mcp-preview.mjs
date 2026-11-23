@@ -8,22 +8,57 @@ const standaloneFlags = new Set(['-y', '--yes', '--stdio', '--quiet', '--no-inst
 const runtimeFlags = new Set(['--verbose', '--debug', '--read-only'])
 const displayLimit = 20
 
-const portValue = value => /^\d{1,5}$/.test(value) && Number(value) <= 65535 ? value : undefined
+const integerValue = (min, max) => value => {
+  if (!/^\d{1,5}$/.test(value)) return undefined
+  const number = Number(value)
+  return number >= min && number <= max ? value : undefined
+}
 const among = (...choices) => value => choices.includes(value) ? value : undefined
 const bindAddress = among('localhost', '127.0.0.1', '0.0.0.0', '::1', '::')
 // Empty indicates a recognized argument whose value must remain concealed.
 const pathValue = value => value && !/^[-\x00-\x20\x7f]|[\x00-\x1f\x7f]/.test(value) ? '' : undefined
+const directorySegment = /^[a-z][a-z0-9._ -]{0,31}$/i
+const privateDirectory = /(?:^|[._-])(?:private|certs?|keys?|ssh|ssl|vault|sk[-_](?:proj|test)|xox[abprs])(?:[._-]|$)/i
+
+function directoryValue(value) {
+  if (pathValue(value) === undefined) return undefined
+  // Reserve space for the option prefix in the RPC's per-argument limit.
+  if (value.length > 80) return ''
+  const path = value.replaceAll('\\', '/')
+  const temporary = /^(?:\/tmp|\/var\/tmp|\/private\/tmp)(?:\/|$)/.exec(path)
+    ?? /^[a-z]:\/temp(?:\/|$)/i.exec(path)
+  if (!temporary && /^(?:\/|[a-z]:|~)/i.test(path)) return ''
+  if (path === '.' || path === './') return value
+
+  const relative = temporary ? path.slice(temporary[0].length) : path.replace(/^\.\//, '')
+  if (temporary && !relative) return value
+  const segments = relative.replace(/\/$/, '').split('/')
+  const ordinary = segments.every(segment => {
+    const identifier = segment.replaceAll(' ', '-')
+    return segment === segment.trim() && directorySegment.test(segment)
+      && !sensitiveName.test(identifier) && !privateDirectory.test(identifier)
+  })
+  return ordinary ? value : ''
+}
+
+const workerCount = integerValue(1, 65535)
 const optionValues = new Map([
-  ['--port', portValue],
+  ['--port', integerValue(0, 65535)],
+  ['--threads', workerCount],
+  ['--workers', workerCount],
+  ['--max-workers', workerCount],
+  ['--jobs', workerCount],
+  ['--concurrency', workerCount],
+  ['--parallelism', workerCount],
   ['--host', bindAddress],
   ['--bind', bindAddress],
   ['--transport', among('stdio', 'http', 'sse', 'streamable-http', 'streamableHttp')],
   ['--log-level', among('trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent')],
-  ['--cwd', pathValue],
-  ['--dir', pathValue],
-  ['--directory', pathValue],
-  ['--root', pathValue],
-  ['--workdir', pathValue],
+  ['--cwd', directoryValue],
+  ['--dir', directoryValue],
+  ['--directory', directoryValue],
+  ['--root', directoryValue],
+  ['--workdir', directoryValue],
   ['--config', pathValue],
   ['--config-dir', pathValue],
 ])
